@@ -1,0 +1,25 @@
+# --- 依赖与构建产物 ---
+node_modules/
+dist/
+release/
+
+# --- 本地备份（脚本自动生成，非源码）---
+config/*-backup-*/
+*-backup-*/
+assets-backup-*/
+
+# --- 调试 / 临时产物 ---
+.tmp-*.png
+.tmp-*.txt
+*.log
+npm-debug.log*
+icon-perch-check.png
+low-perch.png
+perch-zoom.png
+
+# --- 工作区 agent 记忆（私有，不入库）---
+.workbuddy/
+
+# --- 系统 ---
+.DS_Store
+Thumbs.db

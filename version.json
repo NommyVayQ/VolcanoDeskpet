@@ -1,0 +1,7 @@
+{
+  "version": "5.4.0",
+  "pubDate": "2026-09-19",
+  "notes": "飞行对齐旧桌宠：5 个角色全部启用「移动 / 悬停」双相位——位移中播 flymoving、停下来悬停播 fly，走走停停；贴顶飞同步对齐（目标点屏内随机 + 途中反复抓稳停顿）。修复：不在地上的角色退场时先掉回地面再消失，不再悬空爆烟；关程序退场动画尾巴被截断的问题。",
+  "downloadUrl": "https://github.com/NommyVayQ/VolcanoDeskpet/releases/download/v5.4.0/DeskPet-Portable-5.4.0.zip",
+  "channel": "stable"
+}

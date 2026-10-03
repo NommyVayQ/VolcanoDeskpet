@@ -1,0 +1,190 @@
+{
+  "name": "莫娜",
+  "size": {
+    "width": 150,
+    "height": 150
+  },
+  "moveSpeed": 1.2,
+  "detectionRadius": 120,
+  "bottomMargin": 0,
+  "interactionDuration": 3500,
+  "interactGap": 30,
+  "coopEndGap": 120,
+  "coopBodyInsetX": 0,
+  "bubbleOffset": 0.15,
+  "bubbleOffsetX": 0.5,
+  "bubble": {
+    "frameName": "bubble",
+    "leftWidth": 35,
+    "rightWidth": 25,
+    "topHeight": 25,
+    "bottomHeight": 15,
+    "scale": 0.4,
+    "textColor": 0,
+    "textOffsetX": 0,
+    "textOffsetY": -2,
+    "paddingX": 14,
+    "paddingY": 8,
+    "maxTextWidth": 120,
+    "minWidth": 120
+  },
+  "gravity": 0.5,
+  "throwFactor": 1,
+  "maxThrow": 45,
+  "tripThreshold": 12,
+  "bounceThreshold": 4,
+  "tripDurationMs": 1500,
+  "edgeMargin": 50,
+  "facing": "left",
+  "defaultAction": "stand",
+  "spawnDrop": true,
+  "walkAction": "walk",
+  "approachAction": "walk",
+  "climbAction": "climb",
+  "flyAction": "flyCeiling",
+  "climbMaxMs": 20000,
+  "ceilingMaxMs": 20000,
+  "climbTurnChance": 0.35,
+  "climbEndFlyChance": 0.5,
+  "climbCooldownMs": 3000,
+  "dragAction": "drag",
+  "dragIdleAction": "drag-idle",
+  "fallAction": "fall",
+  "removeAction": "bye",
+  "removeActionMs": 2400,
+  "removeFadeMs": 300,
+  "grabDialogue": "~",
+  "tapDialogue": [
+    "很美味呢。",
+    "可以呦~",
+    "饭马上就好。"
+  ],
+  "wanderRecentExempt": [
+    "walk"
+  ],
+  "wanderActions": [
+    {
+      "id": "walk",
+      "weight": 21
+    },
+    {
+      "id": "creep",
+      "weight": 2
+    },
+    {
+      "id": "sit",
+      "weight": 2
+    },
+    {
+      "id": "shakeleg",
+      "weight": 2
+    },
+    {
+      "id": "eat",
+      "weight": 2
+    },
+    {
+      "id": "sing",
+      "weight": 2
+    },
+    {
+      "id": "fishSquid",
+      "weight": 1
+    },
+    {
+      "id": "fishOctopus",
+      "weight": 1
+    },
+    {
+      "id": "fishHotspring",
+      "weight": 1
+    },
+    {
+      "id": "fishBigbone",
+      "weight": 1
+    },
+    {
+      "id": "fishWeed",
+      "weight": 1
+    },
+    {
+      "id": "cookIce",
+      "weight": 1
+    },
+    {
+      "id": "cookBread",
+      "weight": 1
+    },
+    {
+      "id": "cookMeat",
+      "weight": 1
+    },
+    {
+      "id": "cookMilk",
+      "weight": 1
+    },
+    {
+      "id": "cookWine",
+      "weight": 1
+    },
+    {
+      "id": "flyCeiling",
+      "weight": 1
+    }
+  ],
+  "meetRules": {
+    "nina": {
+      "chance": 0.04,
+      "distance": 240,
+      "pair": {
+        "self": "cookMilk",
+        "other": "eatFromMona"
+      }
+    },
+    "rose": {
+      "chance": 0.03,
+      "distance": 180,
+      "pairs": [
+        {
+          "id": "sing",
+          "self": "sing",
+          "other": "sing"
+        },
+        {
+          "id": "eat",
+          "self": "cookBread",
+          "other": "eatFromMona"
+        }
+      ]
+    },
+    "gwen": {
+      "chance": 0.04,
+      "distance": 240,
+      "pairs": [
+        {
+          "self": "cookIce",
+          "other": "eatFromMona"
+        },
+        {
+          "id": "mona_gwen",
+          "self": "pair_mona_gwen",
+          "other": "pair_mona_gwen"
+        }
+      ]
+    },
+    "rebeza": {
+      "chance": 0.04,
+      "distance": 240,
+      "pair": {
+        "self": "cookWine",
+        "other": "eatFromMona"
+      }
+    }
+  },
+  "actionGroups": {
+    "互动": {
+      "label": "互动",
+      "order": 900
+    }
+  }
+}

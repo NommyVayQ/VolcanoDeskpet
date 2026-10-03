@@ -1,0 +1,148 @@
+{
+  "name": "露丝",
+  "size": {
+    "width": 150,
+    "height": 150
+  },
+  "moveSpeed": 1.2,
+  "detectionRadius": 120,
+  "bottomMargin": 0,
+  "interactionDuration": 3500,
+  "interactGap": 30,
+  "coopEndGap": 170,
+  "coopBodyInsetX": 24,
+  "coopEndShift": {
+    "x": -50
+  },
+  "bubbleOffset": 0.15,
+  "bubbleOffsetX": 0.5,
+  "bubble": {
+    "frameName": "bubble",
+    "leftWidth": 35,
+    "rightWidth": 25,
+    "topHeight": 25,
+    "bottomHeight": 15,
+    "scale": 0.4,
+    "textColor": 2236962,
+    "textOffsetX": 0,
+    "textOffsetY": -2,
+    "paddingX": 14,
+    "paddingY": 8,
+    "maxTextWidth": 120,
+    "minWidth": 120
+  },
+  "gravity": 0.5,
+  "throwFactor": 1,
+  "maxThrow": 45,
+  "tripThreshold": 12,
+  "bounceThreshold": 4,
+  "tripDurationMs": 1500,
+  "edgeMargin": 50,
+  "facing": "left",
+  "defaultAction": "idle",
+  "spawnDrop": true,
+  "interactAction": "interact",
+  "walkAction": "walk",
+  "approachAction": "walk",
+  "climbAction": "climb",
+  "flyAction": "flyCeiling",
+  "climbMaxMs": 20000,
+  "ceilingMaxMs": 20000,
+  "climbTurnChance": 0.35,
+  "climbEndFlyChance": 0.5,
+  "climbCooldownMs": 3000,
+  "dragAction": "drag",
+  "dragIdleAction": "drag-idle",
+  "fallAction": "fall",
+  "removeAction": "bye",
+  "removeActionMs": 2400,
+  "removeFadeMs": 300,
+  "grabDialogue": "唔…放开我！",
+  "tapDialogue": [
+    "诶？",
+    "唔",
+    "别这样啦…"
+  ],
+  "wanderRecentExempt": [
+    "walk"
+  ],
+  "wanderActions": [
+    {
+      "id": "walk",
+      "weight": 14
+    },
+    {
+      "id": "creep",
+      "weight": 2
+    },
+    {
+      "id": "sit",
+      "weight": 2
+    },
+    {
+      "id": "eat",
+      "weight": 2
+    },
+    {
+      "id": "read",
+      "weight": 2
+    },
+    {
+      "id": "sing",
+      "weight": 2
+    },
+    {
+      "id": "playingSword",
+      "weight": 2
+    },
+    {
+      "id": "shakeHead",
+      "weight": 1
+    },
+    {
+      "id": "flyCeiling",
+      "weight": 1
+    }
+  ],
+  "actionGroups": {
+    "互动": {
+      "label": "互动",
+      "order": 900
+    }
+  },
+  "meetRules": {
+    "gwen": {
+      "pairs": [
+        {
+          "id": "rose_gwen",
+          "self": "pair_rose_gwen",
+          "other": "pair_rose_gwen"
+        }
+      ],
+      "chance": 0.03,
+      "distance": 200
+    },
+    "mona": {
+      "pairs": [
+        {
+          "id": "rose_mona",
+          "self": "pair_rose_mona",
+          "other": "pair_rose_mona"
+        }
+      ],
+      "chance": 0.03,
+      "distance": 200
+    },
+    "rebeza": {
+      "pairs": [
+        {
+          "id": "rose_rebeza",
+          "self": "pair_rose_rebeza",
+          "other": "pair_rose_rebeza"
+        }
+      ],
+      "chance": 0.03,
+      "distance": 200
+    }
+  }
+}

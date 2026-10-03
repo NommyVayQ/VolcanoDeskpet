@@ -1,0 +1,33 @@
+{
+  "meet": {
+    "chance": 0.02,
+    "distance": 140,
+    "rollInterval": 500
+  },
+  "characters": [
+    "rose",
+    "nina",
+    "rebeza",
+    "gwen",
+    "mona"
+  ],
+  "window": {
+    "whitelist": [
+      "微信",
+      "微信2",
+      "QQ",
+      "TIM",
+      "记事本",
+      "Notepad",
+      "设置",
+      "SAI Ver.2",
+      "Chat",
+      "Friends",
+      "conf",
+      "Data"
+    ],
+    "throwEnabled": true,
+    "throwRollMs": 60000,
+    "throwChance": 0.01
+  }
+}

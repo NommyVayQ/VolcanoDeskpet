@@ -1,0 +1,142 @@
+{
+  "name": "妮娜",
+  "size": {
+    "width": 150,
+    "height": 150
+  },
+  "moveSpeed": 1.2,
+  "detectionRadius": 120,
+  "bottomMargin": 0,
+  "interactionDuration": 3500,
+  "interactGap": 30,
+  "coopEndGap": 170,
+  "coopBodyInsetX": 26,
+  "coopEndShift": {
+    "x": -50
+  },
+  "bubbleOffset": 0.15,
+  "bubbleOffsetX": 0.5,
+  "bubble": {
+    "frameName": "bubble",
+    "leftWidth": 35,
+    "rightWidth": 25,
+    "topHeight": 25,
+    "bottomHeight": 15,
+    "scale": 0.4,
+    "textColor": 0,
+    "textOffsetX": 0,
+    "textOffsetY": -2,
+    "paddingX": 14,
+    "paddingY": 8,
+    "maxTextWidth": 120,
+    "minWidth": 120
+  },
+  "gravity": 0.5,
+  "throwFactor": 1,
+  "maxThrow": 45,
+  "tripThreshold": 12,
+  "bounceThreshold": 4,
+  "tripDurationMs": 1500,
+  "edgeMargin": 50,
+  "facing": "left",
+  "defaultAction": "idle",
+  "spawnDrop": true,
+  "interactAction": "interact",
+  "walkAction": "walk",
+  "approachAction": "walk",
+  "climbAction": "climb",
+  "flyAction": "flyCeiling",
+  "climbMaxMs": 20000,
+  "ceilingMaxMs": 20000,
+  "climbTurnChance": 0.35,
+  "climbEndFlyChance": 0.5,
+  "climbCooldownMs": 3000,
+  "dragAction": "drag",
+  "dragIdleAction": "drag-idle",
+  "fallAction": "fall",
+  "removeAction": "bye",
+  "removeActionMs": 2400,
+  "removeFadeMs": 300,
+  "grabDialogue": "好高…",
+  "tapDialogue": [
+    "嗯？",
+    "怎么啦？",
+    "明天见~"
+  ],
+  "wanderRecentExempt": [
+    "walk"
+  ],
+  "wanderActions": [
+    {
+      "id": "walk",
+      "weight": 17
+    },
+    {
+      "id": "creep",
+      "weight": 2
+    },
+    {
+      "id": "sit",
+      "weight": 2
+    },
+    {
+      "id": "eat",
+      "weight": 2
+    },
+    {
+      "id": "shakeHead",
+      "weight": 2
+    },
+    {
+      "id": "sleep",
+      "weight": 2
+    },
+    {
+      "id": "divination",
+      "weight": 2
+    },
+    {
+      "id": "pray",
+      "weight": 1
+    },
+    {
+      "id": "plantFlower",
+      "weight": 1
+    },
+    {
+      "id": "plantCarrot",
+      "weight": 1
+    },
+    {
+      "id": "plantGrape",
+      "weight": 1
+    },
+    {
+      "id": "flyCeiling",
+      "weight": 1
+    }
+  ],
+  "meetRules": {
+    "rose": {
+      "chance": 0.02,
+      "distance": 140
+    },
+    "mona": {
+      "pairs": [
+        {
+          "id": "nina_mona",
+          "self": "pair_nina_mona",
+          "other": "pair_nina_mona"
+        }
+      ],
+      "chance": 0.03,
+      "distance": 200
+    }
+  },
+  "actionGroups": {
+    "互动": {
+      "label": "互动",
+      "order": 900
+    }
+  }
+}

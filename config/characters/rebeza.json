@@ -1,0 +1,121 @@
+{
+  "name": "雷贝莎",
+  "size": {
+    "width": 150,
+    "height": 150
+  },
+  "moveSpeed": 1.2,
+  "detectionRadius": 120,
+  "bottomMargin": 0,
+  "interactionDuration": 3500,
+  "interactGap": 30,
+  "coopEndGap": 120,
+  "coopBodyInsetX": 0,
+  "bubbleOffset": 0.15,
+  "bubbleOffsetX": 0.5,
+  "bubble": {
+    "frameName": "bubble",
+    "leftWidth": 35,
+    "rightWidth": 25,
+    "topHeight": 25,
+    "bottomHeight": 15,
+    "scale": 0.4,
+    "textOffsetX": 0,
+    "textOffsetY": -2,
+    "paddingX": 14,
+    "paddingY": 8,
+    "maxTextWidth": 120,
+    "minWidth": 120
+  },
+  "gravity": 0.5,
+  "throwFactor": 1,
+  "maxThrow": 45,
+  "tripThreshold": 12,
+  "bounceThreshold": 4,
+  "tripDurationMs": 1500,
+  "edgeMargin": 50,
+  "facing": "left",
+  "defaultAction": "stand",
+  "spawnDrop": true,
+  "walkAction": "walk",
+  "approachAction": "walk",
+  "climbAction": "climb",
+  "flyAction": "flyCeiling",
+  "climbMaxMs": 20000,
+  "ceilingMaxMs": 20000,
+  "climbTurnChance": 0.35,
+  "climbEndFlyChance": 0.5,
+  "climbCooldownMs": 3000,
+  "dragAction": "drag",
+  "dragIdleAction": "drag-idle",
+  "fallAction": "fall",
+  "removeAction": "bye",
+  "removeActionMs": 2400,
+  "removeFadeMs": 0,
+  "grabDialogue": "啊？",
+  "tapDialogue": [
+    "诶？",
+    "呵呵！",
+    "哈哈！"
+  ],
+  "wanderRecentExempt": [
+    "walk"
+  ],
+  "wanderActions": [
+    {
+      "id": "walk",
+      "weight": 15
+    },
+    {
+      "id": "creep",
+      "weight": 2
+    },
+    {
+      "id": "sit",
+      "weight": 2
+    },
+    {
+      "id": "eat",
+      "weight": 2
+    },
+    {
+      "id": "sitAndDangleLegs",
+      "weight": 2
+    },
+    {
+      "id": "headache",
+      "weight": 2
+    },
+    {
+      "id": "work",
+      "weight": 2
+    },
+    {
+      "id": "meat",
+      "weight": 2
+    },
+    {
+      "id": "flyCeiling",
+      "weight": 1
+    }
+  ],
+  "actionGroups": {
+    "互动": {
+      "label": "互动",
+      "order": 900
+    }
+  },
+  "meetRules": {
+    "gwen": {
+      "pairs": [
+        {
+          "id": "rebeza_gwen",
+          "self": "pair_rebeza_gwen",
+          "other": "pair_rebeza_gwen"
+        }
+      ],
+      "chance": 0.03,
+      "distance": 200
+    }
+  }
+}
