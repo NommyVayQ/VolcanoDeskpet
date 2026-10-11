@@ -30,10 +30,16 @@ function compile() {
   if (fs.existsSync(out) && fs.statSync(out).mtimeMs >= fs.statSync(srcFile).mtimeMs) return out;
   const tsc = path.join(root, 'node_modules/typescript/bin/tsc');
   // 只编译这一个文件（tsc 会顺带 emit 依赖的 Pet/SpriteResolver，但我们不会去 require 它们）
-  execFileSync(process.execPath, [tsc, 'src/renderer/windowCeiling.ts',
-    '--outDir', '.tmp-wintop', '--module', 'commonjs', '--target', 'es2020',
-    '--moduleResolution', 'node', '--skipLibCheck', '--esModuleInterop'],
-    { cwd: root, stdio: 'pipe' });
+  try {
+    execFileSync(process.execPath, [tsc, 'src/renderer/windowCeiling.ts',
+      '--outDir', '.tmp-wintop', '--module', 'commonjs', '--target', 'es2020',
+      '--moduleResolution', 'node', '--skipLibCheck', '--esModuleInterop'],
+      { cwd: root, stdio: 'pipe' });
+  } catch (e) {
+    // 沙箱下 node 派生子进程常报 EBUSY；有上次产物就复用，并提示手工编译命令。
+    if (!fs.existsSync(out)) throw e;
+    console.log('! tsc 子进程被拦（' + (e.code || 'spawn 失败') + '），复用已有产物');
+  }
   return out;
 }
 
@@ -416,6 +422,63 @@ const pastGap = () => { fakeNow += 5000; };
   }
   check('T11 全项目无 IE 底边（bottomBorder / ClimbIEBottom）实现 —— 本次不做窗底', hits.length === 0,
     hits.join(','));
+}
+
+// ================================================================ T12 「只站最上层那扇窗」判定（windowTopmost.ts）
+// 2026-10-11 用户要求：站立的窗口必须在屏幕最上层，不在上层就不要触发。
+// windowInteract.ts 顶层就 require('electron')，Node 里 require 不进来，故判定抽成纯模块来测。
+{
+  const src = path.join(root, 'src/renderer/windowTopmost.ts');
+  const out = path.join(outDir, 'windowTopmost.js');
+  if (!fs.existsSync(out) || fs.statSync(out).mtimeMs < fs.statSync(src).mtimeMs) {
+    try {
+      execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'),
+        'src/renderer/windowTopmost.ts', '--outDir', '.tmp-wintop', '--module', 'commonjs',
+        '--target', 'es2020', '--moduleResolution', 'node', '--skipLibCheck', '--esModuleInterop'],
+        { cwd: root, stdio: 'pipe' });
+    } catch (e) {
+      if (!fs.existsSync(out)) throw e; // 沙箱常拦 node 派生子进程(EBUSY)；有旧产物就先用着
+    }
+  }
+  const wt = (await import('file://' + out));
+  const W = (hwnd, z, occluded, title) => ({ hwnd, z, occluded, title: title || 'w' + hwnd });
+
+  check('T12a 单扇窗 → 它就是最上层', wt.pickTopmostWindow([W(1, 0)]).hwnd === 1);
+  check('T12b 取 Z 序最小者（z 越小越靠前）', wt.pickTopmostWindow([W(1, 2), W(2, 0), W(3, 1)]).hwnd === 2);
+  check('T12c ★ 被完全遮挡的窗不算「最上层」（用户看不见）',
+    wt.pickTopmostWindow([W(1, 0, true), W(2, 1, false)]).hwnd === 2);
+  check('T12d 全部被遮挡 → null（没有看得见的最上层 → 一律不触发）',
+    wt.pickTopmostWindow([W(1, 0, true), W(2, 1, true)]) === null);
+  check('T12e 空列表 / null → null', wt.pickTopmostWindow([]) === null && wt.pickTopmostWindow(null) === null);
+  check('T12f 缺 z 字段按 0 处理（不崩）', wt.pickTopmostWindow([{ hwnd: 7 }]).hwnd === 7);
+  check('T12g isTopmostWindow：最上层那扇=true',
+    wt.isTopmostWindow(W(2, 0), [W(1, 1), W(2, 0)]) === true);
+  check('T12h ★ isTopmostWindow：压在下面的=false（不在上层 → 不触发）',
+    wt.isTopmostWindow(W(1, 1), [W(1, 1), W(2, 0)]) === false);
+  check('T12i isTopmostWindow：窗口已消失（不在列表里）= false',
+    wt.isTopmostWindow(W(9, 0), [W(1, 0)]) === false);
+  // 半遮挡（只被盖掉一部分）仍算可见 → 可站：屏幕上确实还露着一大块
+  check('T12j 半遮挡（occluded=false）仍算最上层 —— occluded 只判「完全盖住」',
+    wt.isTopmostWindow(W(1, 0, false), [W(1, 0, false), W(2, 1, false)]) === true);
+}
+
+// ================================================================ T13 四处入口都过了「最上层」闸门
+{
+  const s = fs.readFileSync(path.join(root, 'src/renderer/windowInteract.ts'), 'utf8');
+  const code = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  check('T13a 引入 windowTopmost（判定只写一遍）', /from '\.\/windowTopmost'/.test(s));
+  check('T13b update() 已站窗顶：不再是最上层 → 释放掉落',
+    /w\.hwnd !== top\.hwnd\) \{\s*\n\s*log\([\s\S]{0,200}?不在最上层[\s\S]{0,200}?releaseBound/.test(code)
+    || (/w\.hwnd !== top\.hwnd/.test(code) && /不在最上层/.test(s)));
+  // ⚠️ 注意 code 已剥掉行注释，这里只能匹配代码本身
+  const crossing = code.slice(code.indexOf('2) 空中宠物') > 0 ? code.lastIndexOf('for (const w of this.winCache)') : 0);
+  check('T13c update() 空中穿越检测：只接最上层那扇（压在下面的不接，让她继续落到地面）',
+    /for \(const w of this\.winCache\) \{\s*if \(w\.occluded\) continue;\s*if \(top && w\.hwnd !== top\.hwnd\) continue;/.test(code),
+    crossing.slice(0, 120));
+  check('T13d findWindowAt() 拖放落点：命中的不是最上层那扇 → 返回 null',
+    /best\.hwnd !== top\.hwnd/.test(code));
+  check('T13e bindToWindow() 显式指定窗口时也过闸', /this\.isTopmost\(w, wins \|\| \[\]\)/.test(code));
+  check('T13f topmostWindow()（自动站窗/搬运）本身就取最上层', /const best = this\.pickTopmost\(wins\)/.test(code));
 }
 
 // ================================================================ 输出

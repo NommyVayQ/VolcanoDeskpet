@@ -32,6 +32,7 @@
 import { Pet } from './Pet';
 import { SpriteResolver } from './SpriteResolver';
 import { CeilingBehavior } from './windowCeiling';
+import { pickTopmostWindow, isTopmostWindow } from './windowTopmost';
 
 const req: any = (window as any).require;
 const { ipcRenderer } = req('electron');
@@ -209,17 +210,21 @@ export class WindowInteract {
     return best;
   }
 
-  /** 从候选窗口里取「未被遮挡且 Z 序最靠前」的（z 最小）。listWindows 已按 Z 序顶→底枚举，
-   *  这里显式取 min(z) 以容忍任何重排；occluded 的候选跳过（除非全部被遮 → 返回 null）。 */
+  /** 从候选窗口里取「**用户眼中最上层的那扇**」= Z 序最靠前且未被完全遮挡者。
+   *  listWindows 按 Z 序顶→底枚举（z 越小越靠前），这里显式取 min(z) 以容忍任何重排；
+   *  `occluded`（采样点全被盖住 = 看不见）的候选跳过；全部被遮 → 返回 null。
+   *
+   *  ⚠️ 2026-10-11 起这是**唯一**允许站上去的窗口（用户要求「站立的窗口要在屏幕最上层，
+   *     不在上层就不要触发」）：被别的窗口压在下面的窗口不再接人，已站在上面的也要掉下来。
+   *     注意 occluded 只判「完全遮住」——被非名单窗口盖掉一半仍算可见，仍可站（半可见窗口在
+   *     屏幕上确实还露着一大块，站上去不算穿帮）。 */
   private pickTopmost(wins: WinInfo[]): WinInfo | null {
-    let best: WinInfo | null = null;
-    let bestZ = Infinity;
-    for (const w of wins) {
-      if (w.occluded) continue;
-      const z = w.z ?? 0;
-      if (z < bestZ) { bestZ = z; best = w; }
-    }
-    return best;
+    return pickTopmostWindow(wins) as WinInfo | null;
+  }
+
+  /** 这扇窗此刻是不是最上层（闸门用）：不在上层 → 不站 / 已站的掉下来。 */
+  private isTopmost(w: WinInfo, wins: WinInfo[]): boolean {
+    return isTopmostWindow(w, wins);
   }
 
   /** 搬运窗口：窗口吸附宠物头顶。 */
@@ -267,6 +272,13 @@ export class WindowInteract {
       const z = w.z ?? 0;
       if (z < bestZ) { bestZ = z; best = w; }
     }
+    // ⚠️ 落点命中的那扇必须同时是**最上层**那扇：压在下面的窗口不触发（2026-10-11 用户要求）。
+    const top = this.pickTopmost(wins);
+    if (best && top && best.hwnd !== top.hwnd) {
+      log('info', '[winledge] 落点窗口「' + best.title.slice(0, 20) + '」不在最上层（上层是「'
+        + top.title.slice(0, 20) + '」），不站');
+      return null;
+    }
     return best;
   }
 
@@ -282,7 +294,17 @@ export class WindowInteract {
   async bindToWindow(pet: Pet, win?: WinInfo): Promise<boolean> {
     if (!(await this.isAvailable())) return false;
     if (pet.isDraggingAction() || pet.isLeaving()) return false;
-    const w = win ?? await this.topmostWindow(pet);
+    let w = win ?? await this.topmostWindow(pet) ?? undefined;
+    if (w && win) {
+      // 显式指定窗口时也要过「最上层」这道闸：不是当前最上层那扇就不站（用户要求）。
+      const wins: WinInfo[] = await ipcRenderer.invoke('win-list', this.whitelist);
+      if (!this.isTopmost(w, wins || [])) {
+        const top = this.pickTopmost(wins || []);
+        log('info', '[winledge] 目标窗口「' + w.title.slice(0, 20) + '」不在最上层（上层是「'
+          + (top ? top.title.slice(0, 20) : '无') + '」），不站');
+        w = undefined;
+      }
+    }
     if (!w) { log('warn', 'no window to stand on'); return false; }
     this.bindNow(pet, w);
     return true;
@@ -522,11 +544,20 @@ export class WindowInteract {
       // ⚠️ 必须传白名单：不传 = 所有窗口都进缓存 = 「任何窗口都能站」
       ipcRenderer.invoke('win-list', this.whitelist).then((w: WinInfo[] | null) => { if (w) this.winCache = w; }).catch(() => {});
     }
-    // —— 1) 已绑定：跟随窗口；窗口消失 / 被拖拽 / 退场 / 踩空 → 释放掉落 ——
+    // ⚠️ 「最上层」闸门：只有当前 Z 序最靠前且未被完全遮挡的那扇窗才能站人。
+    //    名单里出现更靠前的窗口 / 本窗被压到下面 → 已站的掉下来、空中的不再接（2026-10-11 用户要求）。
+    const top = this.pickTopmost(this.winCache);
+    // —— 1) 已绑定：跟随窗口；窗口消失 / 被拖拽 / 退场 / 踩空 / 不再是最上层 → 释放掉落 ——
     for (const [pet, b] of [...this.bound.entries()]) {
       if (pet.isLeaving() || pet.isDraggingAction()) { this.releaseBound(pet); continue; }
       const w = this.winCache.find((x) => x.hwnd === b.hwnd && !x.occluded);
       if (!w) { this.releaseBound(pet); continue; } // 窗口被关/最小化/不再名单里 → 掉下来
+      if (top && w.hwnd !== top.hwnd) {
+        log('info', '[winledge] 窗口「' + w.title.slice(0, 20) + '」已不在最上层（上层是「'
+          + top.title.slice(0, 20) + '」），掉下来');
+        this.releaseBound(pet);
+        continue;
+      }
       if (!this.syncBound(pet, b, w, now)) {
         log('info', '[winledge] 锚点水平离开窗口跨度（旧版 isOn 不成立），掉下去');
         this.releaseBound(pet);
@@ -555,6 +586,7 @@ export class WindowInteract {
       const cx = pet.container.x + petW / 2;
       for (const w of this.winCache) {
         if (w.occluded) continue;
+        if (top && w.hwnd !== top.hwnd) continue; // 不是最上层那扇 → 不接（让她继续落到地面）
         if (cx < w.x || cx > w.x + w.w) continue;
         // 穿越检测：上一帧脚底还在顶边**上方**、这一帧到了顶边或下方 → 被窗顶接住
         const crossed = prev !== undefined && prev < w.y && feetY >= w.y;
