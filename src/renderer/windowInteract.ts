@@ -152,6 +152,11 @@ export class WindowInteract {
   /** 「刚掉下窗顶」的冷却：掉落后短时间内不再被（可能还没刷新的）窗口缓存接回同一处，避免抖动。
    *  取 700ms：踩空掉落途中要够长，否则「窗口正在下移 → 角色掉一半又被追上」会变成黏住不放。 */
   private bindBlockUntil = new Map<Pet, number>();
+  /** 「可互动窗口」白名单（标题**包含**任一字符串即命中，主进程 titleInWhitelist 判）。
+   *  ⚠️ 本类**所有** `win-list` 调用都必须带上它（窗顶穿越检测 / 搬运 / 自动站窗），
+   *     否则任何窗口都会被当成可互动窗口 —— 表现就是「随便什么窗口都能站上去」。
+   *     空数组 = 不限制（主进程 titleInWhitelist 的空名单语义），保持与投掷一致的既有行为。 */
+  private whitelist: string[] = [];
 
   constructor(resolver: SpriteResolver) {
     this.resolver = resolver;
@@ -161,6 +166,15 @@ export class WindowInteract {
       release: (pet) => this.releaseBound(pet),
       log,
     });
+  }
+
+  /** 更新可互动窗口白名单（设置面板改完名单后调用）。
+   *  ⚠️ 必须立刻清窗口缓存：否则下一帧还在用旧名单的缓存判定「窗口还在」，
+   *     刚从名单里删掉的窗口要等 100ms 才失效（这段时间里仍能站上去）。 */
+  setWhitelist(list: string[]) {
+    this.whitelist = Array.isArray(list) ? [...list] : [];
+    this.winCache = [];
+    this.winCacheAt = 0;
   }
 
   /** 开关「窗顶专属行为组」（"On Top of IE" 条件组）。关掉立刻作废在手编排。 */
@@ -186,7 +200,7 @@ export class WindowInteract {
    *  抓它就是「空手抛掷」。主进程 listWindows 已按采样点算好 occluded，这里优先取未遮挡的；
    *  若所有候选都被遮住，返回 null 放弃演出（有 warn 日志可查）。 */
   private async topmostWindow(pet: Pet): Promise<WinInfo | null> {
-    const wins: WinInfo[] = await ipcRenderer.invoke('win-list');
+    const wins: WinInfo[] = await ipcRenderer.invoke('win-list', this.whitelist);
     if (!wins || wins.length === 0) return null;
     const best = this.pickTopmost(wins);
     if (!best && wins.length > 0) {
@@ -235,7 +249,7 @@ export class WindowInteract {
    *  返回最靠前（z 最小）的命中窗口，无则 null。winapi 不可用返回 null。 */
   async findWindowAt(cx: number, feetY: number, centerY: number, tol = 60): Promise<WinInfo | null> {
     if (!(await this.isAvailable())) return null;
-    const wins: WinInfo[] = await ipcRenderer.invoke('win-list');
+    const wins: WinInfo[] = await ipcRenderer.invoke('win-list', this.whitelist);
     if (!wins || wins.length === 0) return null;
     const inside = (w: WinInfo) => {
       if (w.occluded) return false;
@@ -341,7 +355,7 @@ export class WindowInteract {
     if (this.carry) { this.carry.pet.isWindowHeld = false; this.carry = null; } // carry 是单例，接管前先放掉别人的
     let wins: WinInfo[] = [];
     try {
-      wins = await ipcRenderer.invoke('win-list', whitelist);
+      wins = await ipcRenderer.invoke('win-list', whitelist ?? this.whitelist);
     } catch (e) {
       log('warn', '[winthrow] 枚举窗口失败: ' + String(e));
       return false;
@@ -505,7 +519,8 @@ export class WindowInteract {
       if (this.available === null) {
         ipcRenderer.invoke('win-available').then((ok: any) => { this.available = !!ok; }).catch(() => { this.available = false; });
       }
-      ipcRenderer.invoke('win-list').then((w: WinInfo[] | null) => { if (w) this.winCache = w; }).catch(() => {});
+      // ⚠️ 必须传白名单：不传 = 所有窗口都进缓存 = 「任何窗口都能站」
+      ipcRenderer.invoke('win-list', this.whitelist).then((w: WinInfo[] | null) => { if (w) this.winCache = w; }).catch(() => {});
     }
     // —— 1) 已绑定：跟随窗口；窗口消失 / 被拖拽 / 退场 / 踩空 → 释放掉落 ——
     for (const [pet, b] of [...this.bound.entries()]) {

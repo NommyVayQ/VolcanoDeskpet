@@ -235,6 +235,9 @@ async function init() {
   const managerPanel = new ManagerPanel(supervisorPanel); // 传 supervisor 引用，让面板顶部显示「🔧 调试」按钮
   winInteract = new WindowInteract(resolver);
   winInteract.setTopBehaviorEnabled(winCfg.topBehaviorEnabled); // 窗顶专属行为组开关
+  // ⚠️ 必须注入白名单：WindowInteract 内部的窗顶穿越检测 / 搬运 / 自动站窗都靠它筛窗口，
+  //    不注入 = 不传 whitelist 给 win-list = 任何窗口都能站上去。
+  winInteract.setWhitelist(winCfg.whitelist);
   // 设置面板（右键「设置」）：收纳窗口互动配置 + 「关于」入口。
   // 注意面板在构造时会捕获 winOk，故先探测 koffi 可用性再建面板。
   const winOk = await winInteract.isAvailable();
@@ -242,6 +245,7 @@ async function init() {
   const windowListPanel = new WindowListPanel(configDir, winCfg, (next) => {
     winCfg = next;
     settingsPanel.syncConfig(winCfg);
+    winInteract?.setWhitelist(winCfg.whitelist); // 名单改完立刻生效（清窗口缓存，已站的非名单窗口会掉下来）
     log('info', 'window config 已更新: whitelist=[' + winCfg.whitelist.join('/') + '] throwEnabled=' + winCfg.throwEnabled);
   });
   // 从设置面板点进名单面板后，关掉名单要回到设置，而不是把用户丢回桌面

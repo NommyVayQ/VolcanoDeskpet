@@ -385,6 +385,20 @@ const pastGap = () => { fakeNow += 5000; };
   const g3 = /\|\| hitRightWall\)\s*&&[^;]*!this\.onWindowTop/.test(petSrc);      // 撞墙不转攀爬
   check('T10e 窗顶上禁止转屏幕攀爬/贴顶（3 处守卫）', g1 && g2 && g3,
     '贴边=' + g1 + ' wander池=' + g2 + ' 撞墙=' + g3);
+  // ⚠️ 回归防线：曾经 update() 的窗顶穿越检测调 'win-list' 时**漏传白名单** → 任何窗口都能站上去。
+  //    规则：本类里所有 win-list 调用都必须带白名单，否则主进程 titleInWhitelist 放行全部窗口。
+  const bare = (wi.match(/invoke\('win-list'\)/g) || []).length;
+  const withWl = (wi.match(/invoke\('win-list',\s/g) || []).length;
+  check('T10g windowInteract 的 win-list 调用全部带白名单（裸调用 ' + bare + ' 处，带参 ' + withWl + ' 处）',
+    bare === 0 && withWl >= 3);
+  check('T10h WindowInteract 暴露 setWhitelist', /setWhitelist\(list: string\[\]\)/.test(wi));
+
+  const appSrc = fs.readFileSync(path.join(root, 'src/renderer/app.ts'), 'utf8');
+  const injInit = /winInteract\.setWhitelist\(winCfg\.whitelist\)/.test(appSrc);
+  const injPanel = /winInteract\?\.setWhitelist\(winCfg\.whitelist\)/.test(appSrc);
+  check('T10i app.ts 启动时注入白名单 + 名单面板改完后同步（' + (injInit ? '启动✓' : '启动✗')
+    + ' / ' + (injPanel ? '面板✓' : '面板✗') + '）', injInit && injPanel);
+
   check('T10f 主动跳下用 1500ms 冷却（普通掉落 700ms）',
     /releaseBound\(pet: Pet, reason: 'lost' \| 'jump' = 'lost'\)/.test(wi)
     && /reason === 'jump' \? 1500 : 700/.test(wi));

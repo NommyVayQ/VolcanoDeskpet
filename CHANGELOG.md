@@ -24,6 +24,15 @@
 - 跟随复刻 `Border.move()` 的守卫阈值：`FOLLOW_MAX_DX=80` / `FOLLOW_MAX_DOWN=20` / `FOLLOW_MAX_UP=80`；
   脱离判定**只看横向**（锚点=脚底中心是否还在 `[w.x, w.x+w.w]`）。`window.ledgeEnabled` 改 **false**（旧版无自动站窗）。
 
+### 修复：任何窗口都能站上去，`window.whitelist` 形同虚设（P0）
+- 现象：不管什么窗口，角色都能站到它的顶边上。
+- 根因：`WindowInteract.update()` 刷新窗口缓存时调 `win-list` **没传白名单**，主进程
+  `titleInWhitelist(title, undefined)` 返回 true → 所有可见窗口都进了候选。同样漏传的还有
+  `topmostWindow()`（搬运 / 自动站窗）与 `findWindowAt()`（拖放到窗口上）。
+  只有 `startThrowShow()` 从 `app.ts` 显式带了名单，所以**投掷**一直是对的——这也解释了为什么只有站窗顶出问题。
+- 修复：白名单收进 `WindowInteract`（新增 `setWhitelist()`），四处 `win-list` 调用统一带参；
+  启动时注入，名单面板改完后立即同步并清缓存（已站的非名单窗口会马上掉下来）。
+
 ### 修复：跳下后被自己的穿越检测接回窗顶（P0）
 - 根因：`gravity` 实际是 **0.5**（不是 Pet 默认 0.8），vy≈10.4 → 落回窗顶高度需 **683ms**，
   而禁止重绑冷却是 700ms，**只剩 17ms 余量** → 跳下去又被接回窗顶，表现为「跳了个寂寞」。
