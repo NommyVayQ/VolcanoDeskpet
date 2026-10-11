@@ -15,6 +15,7 @@ import { AboutPanel } from './aboutPanel';
 import { supervisorLog } from './supervisor/eventLog';
 import { StatusBar } from './supervisor/StatusBar';
 import { SupervisorPanel } from './supervisor/SupervisorPanel';
+import * as meetLock from './meetLock';
 
 /** 监管日志的安全 emit：永不抛异常 */
 function slog(e: Parameters<typeof supervisorLog.emit>[0]) {
@@ -366,39 +367,28 @@ async function init() {
       //   无 pairTrigger 的纯 coop 落在第三个分支：也先走近再演（见下方 else if）。
       if (def && def.pairTrigger) {
         // 手动配对：找 pairWith 指定的搭档（省略则选最近的、与它有 pair 规则的搭档），走近后各播自己的动作
-        // ⚠️ 已有合体在进行时整段跳过：保证「同时只能有一组合体」（其他人/自己都不能再触发合体）。
-        if (isAnyCoopActive()) {
-          log('info', 'pair action ' + actionId + ' skipped: another coop/paired action is in progress');
-        } else {
-        let partner: Pet | undefined;
+        // ⚠️ 占用判定是**按角色**的：只有 pet 自己或它的搭档正处在合体/配对中才跳过，
+        //    场上另一组无关角色的合体不影响本组（2026-10-11 修「ab 互动中 cd 触发不了」）。
         const targetId = typeof def.pairWith === 'string' ? def.pairWith : undefined;
-        if (targetId) {
-          partner = pets.find((p) => p.config.id === targetId && !p.isLeaving());
-        } else {
-          let bestDist = Infinity;
-          for (const p of pets) {
-            if (p === pet || p.isLeaving() || pairListBetween(pet, p).length === 0) continue;
-            const pa = pet.getPosition(), pb = p.getPosition();
-            const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
-            if (d < bestDist) { bestDist = d; partner = p; }
-          }
-        }
-        if (!partner) {
+        const partner = pickMeetPartner(pet, targetId, !targetId);
+        if (isCoopBusyFor(pet) || (partner && isCoopBusyFor(partner))) {
+          log('info', 'pair action ' + actionId + ' skipped: ' + pet.config.id
+            + (partner ? '/' + partner.config.id : '') + ' already in a coop/paired action');
+        } else if (!partner) {
           log('info', 'pair action ' + actionId + ' skipped: no available partner');
         } else if (!startPairedMeet(pet, partner, resolver, def.pairId)) {
           log('info', 'pair action ' + actionId + ' skipped: no pair rule with ' + partner.config.id);
-        }
         }
       } else if (def && def.coop) {
         // 纯合体动作（**没有** pairTrigger 的老式合体，如 rose/interact、nina/interact）：
         // 与「之前的老合体」保持同一套语义 —— 先让两人**走近**，到位那一刻才演合照帧
         // （旧实现是当场 triggerInteraction，两人原地凭空合体，观感突兀）。
-        // ⚠️ 已有合体在进行时整段跳过（同时只能有一组合体）。
-        if (isAnyCoopActive()) {
-          log('info', 'coop action ' + actionId + ' skipped: another coop/paired action is in progress');
-        } else {
-        const partner = pets.find((p) => p !== pet && !p.isLeaving());
-        if (!partner) {
+        // ⚠️ 同样按角色判占用（见上）。
+        const partner = pickMeetPartner(pet);
+        if (isCoopBusyFor(pet) || (partner && isCoopBusyFor(partner))) {
+          log('info', 'coop action ' + actionId + ' skipped: ' + pet.config.id
+            + (partner ? '/' + partner.config.id : '') + ' already in a coop/paired action');
+        } else if (!partner) {
           log('info', 'coop action ' + actionId + ' skipped: no available partner');
         } else {
           (pet as any)._pendingAction = actionId;
@@ -408,7 +398,6 @@ async function init() {
             partner.startApproach(pet, resolver);
             // 到位由 ticker 判（isApproaching + 距离），走 triggerInteraction → startCoopLead/Follow
           }, resolver);
-        }
         }
       } else {
         pet.startAction(actionId, resolver);
@@ -755,32 +744,37 @@ async function init() {
     return list[list.length - 1];
   }
 
-  /** 是否有任意角色正处于「合体/配对」进行中或正在走近去演合体（全局「同时只能有一组合体」互斥锁）。
-   *  覆盖三种状态：
-   *  ① 真正在播合体帧（coopLead/coopFollow 已置位，一人显形一人隐身）；
-   *  ② 配对动作走近中（_pendingIsPair=true，如吃奶冻 cook/eat）；
-   *  ③ 旧式 coop 走近中（_pendingAction 指向 coop 动作，如 rose/interact 拥抱）。
-   *  普通（非 coop）互动的走近不在此列，故不与普通相遇互斥。 */
-  function isAnyCoopActive(): boolean {
+  // 合体/配对的占用判定见 meetLock.ts（按角色互斥，非全局锁）。
+  const { isCoopBusyFor, isCoopBusyForPair } = meetLock;
+
+  /** 挑一个「可参与互动」的搭档：排除自己、退场中、被拖拽、已在相遇/合体占用中的角色。
+   *  ⚠️ 必须排除占用中的角色：否则 `startApproach` 会静默 return（meetPhase !== 'none'），
+   *     两人永远走不到一起，`_pendingAction` 悬空 —— 表现为「点了互动没反应」。
+   *  targetId：指定搭档角色 id（动作配置的 pairWith）；requirePair：是否要求双方存在配对规则。
+   *  多个候选时取**最近的**（比「取第一个」自然，也避免跨越半屏去抱一个远处的人）。 */
+  function pickMeetPartner(pet: Pet, targetId?: string, requirePair = false): Pet | undefined {
+    const pa = pet.getPosition();
+    let best: Pet | undefined;
+    let bestDist = Infinity;
     for (const p of pets) {
-      if (p.isInCoop()) return true;
-      if (p.isApproaching()) {
-        if ((p as any)._pendingIsPair) return true;
-        const act = (p as any)._pendingAction;
-        const def: any = act ? (p.config.actions as any)[act] : null;
-        if (def && def.coop) return true;
-      }
+      if (p === pet || p.isLeaving() || p.isDraggingAction() || p.isMeetBusy() || p.isInCoop()) continue;
+      if (targetId) {
+        if (p.config.id !== targetId) continue;
+      } else if (requirePair && pairListBetween(pet, p).length === 0) continue;
+      const pb = p.getPosition();
+      const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+      if (d < bestDist) { bestDist = d; best = p; }
     }
-    return false;
+    return best;
   }
 
   /** 手动触发一次配对相遇：让 a、b 走近并就位后各播自己的动作（复用 ticker 到位的 triggerPairedAction）。
    *  与 rollMeet 的 pairs 分支完全等价，只是由菜单点击驱动而非掷骰。返回是否成功发起。
    *  pairId：指定触发 meetRules 里哪一条配对（按 id 选）；省略则按 weight 随机抽一条。
-   *  ⚠️ 已有合体在进行时直接返回 false，保证「同时只能有一组合体」（菜单/掷骰都不会叠加第二对）。 */
+   *  ⚠️ a 或 b 任一方已在合体/配对占用中则直接返回 false —— **只锁这一对**，不锁全场。 */
   function startPairedMeet(a: Pet, b: Pet, resolver: any, pairId?: string): boolean {
-    if (isAnyCoopActive()) {
-      log('info', 'pair meet skipped: another coop/paired action is in progress');
+    if (isCoopBusyForPair(a, b)) {
+      log('info', 'pair meet skipped: ' + a.config.id + '/' + b.config.id + ' already in a coop/paired action');
       return false;
     }
     const list = pairListBetween(a, b);
@@ -863,7 +857,15 @@ async function init() {
   }
 
   /** 概率相遇掷骰：每对候选按各自规则掷骰，命中则双方进入「走近」阶段。 */
-  function rollMeet() {    for (let i = 0; i < pets.length; i++) {
+  function rollMeet() {
+    // ⚠️ 两轮式：先只「掷骰选胜者」、再统一提交（2026-10-11 加）。
+    //   单轮边掷边提交有个洞：落地闸门会**延迟**执行 startApproach（角色还在空中时），
+    //   此刻 a/b 的 meetPhase 仍是 'none' → 同一轮里后面那对（共享其中一个人的）还能通过
+    //   isMeetBusy 检查，把同一个人同时许给两组。允许并发后这个洞更容易踩到。
+    //   第一轮把所有胜者收进 winners 并用 taken 去重，第二轮才真正写 _pending + 走近。
+    const winners: { a: Pet; b: Pet; pair: any; rule: any }[] = [];
+    const taken = new Set<Pet>();
+    for (let i = 0; i < pets.length; i++) {
       for (let j = i + 1; j < pets.length; j++) {
       const a = pets[i];
       const b = pets[j];
@@ -891,32 +893,39 @@ async function init() {
         const distThresh = typeof rule.distance === 'number' ? rule.distance : meetCfg.distance;
         if (dist > distThresh) continue; // 不够近不掷骰
         if (Math.random() < chance) {
-          // ⚠️ 同时只能有一组合体：已有合体在进行时，本回合不发起任何配对演出（普通相遇不受影响）。
-          if (pair && !isAnyCoopActive()) {
-            // 配对动作：规则拥有者演 self，对方演 other；分别记住各自动作 + 配对标记。
-            // owner 按规则来源判定（见 pairOwner），不能写死「a 优先」。
-            const { owner, other: otherPet } = pairOwner(a, b, pair);
-            const selfId = pair.self || (owner.config.interactAction || 'interact');
-            const otherId = pair.other || (otherPet.config.interactAction || 'interact');
-            (owner as any)._pendingAction = selfId;
-            (otherPet as any)._pendingAction = otherId;
-            (owner as any)._pendingIsPair = true;
-            (otherPet as any)._pendingIsPair = true;
-          } else if (!pair) {
-            const actionId = typeof rule.action === 'string' ? rule.action : (a.config.interactAction || 'interact');
-            (a as any)._pendingAction = actionId;
-            (b as any)._pendingAction = actionId;
-          }
-          // 落地闸门：任一方在空中/攀爬/贴顶时先落地再走近，否则两人会在半空触发合体动作。
-          // 已有合体时（pair 分支被跳过）不再走近，避免叠加第二对。
-          if (!(pair && isAnyCoopActive())) {
-            startMeetAfterLanding(a, b, () => {
-              a.startApproach(b, resolver);
-              b.startApproach(a, resolver);
-            }, resolver);
-          }
+          // ⚠️ 占用判定按**这一对**：a/b 自己有人在合体链上才不发配对演出。
+          //    场上别处正在演的合体与本对无关，不该拦（2026-10-11 修「ab 互动中 cd 触发不了」）。
+          const coopBusy = isCoopBusyForPair(a, b);
+          if (pair && coopBusy) continue; // 本对已被合体占用 → 不发配对演出
+          if (taken.has(a) || taken.has(b)) continue; // 本轮已被更早胜出的那对占用
+          taken.add(a); taken.add(b);
+          winners.push({ a, b, pair, rule });
         }
       }
+    }
+    // 第二轮：统一提交（此刻所有胜者互不重叠，不会出现「一个人被两组同时预定」）
+    for (const wn of winners) {
+      const { a, b, pair, rule } = wn;
+      if (pair) {
+        // 配对动作：规则拥有者演 self，对方演 other；分别记住各自动作 + 配对标记。
+        // owner 按规则来源判定（见 pairOwner），不能写死「a 优先」。
+        const { owner, other: otherPet } = pairOwner(a, b, pair);
+        const selfId = pair.self || (owner.config.interactAction || 'interact');
+        const otherId = pair.other || (otherPet.config.interactAction || 'interact');
+        (owner as any)._pendingAction = selfId;
+        (otherPet as any)._pendingAction = otherId;
+        (owner as any)._pendingIsPair = true;
+        (otherPet as any)._pendingIsPair = true;
+      } else {
+        const actionId = typeof rule.action === 'string' ? rule.action : (a.config.interactAction || 'interact');
+        (a as any)._pendingAction = actionId;
+        (b as any)._pendingAction = actionId;
+      }
+      // 落地闸门：任一方在空中/攀爬/贴顶时先落地再走近，否则两人会在半空触发合体动作。
+      startMeetAfterLanding(a, b, () => {
+        a.startApproach(b, resolver);
+        b.startApproach(a, resolver);
+      }, resolver);
     }
   }
 

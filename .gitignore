@@ -26,3 +26,6 @@ Thumbs.db
 
 # --- 单文件测试编译产物 ---
 .tmp-wintop/
+
+# --- 单文件测试编译产物 ---
+.tmp-meetlock/
