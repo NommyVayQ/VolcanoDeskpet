@@ -29,3 +29,7 @@ Thumbs.db
 
 # --- 单文件测试编译产物 ---
 .tmp-meetlock/
+
+# --- 启动器产物（Node SEA 打包，83MB，不入库）---
+启动桌宠.exe
+.tmp-launcher/

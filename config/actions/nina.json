@@ -162,39 +162,6 @@
       "label": "占卜",
       "frameMs": 1200
     },
-    "sleep": {
-      "behavior": "static",
-      "frames": [
-        "L-sleep-1",
-        "L-sleep-2",
-        "L-sleep-3",
-        "L-sleep-4",
-        "L-sleep-5",
-        "L-sleep-6",
-        "L-sleep-7",
-        "L-sleep-8",
-        "L-sleep-9",
-        "L-sleep-10"
-      ],
-      "rightFrames": [
-        "R-sleep-1",
-        "R-sleep-2",
-        "R-sleep-3",
-        "R-sleep-4",
-        "R-sleep-5",
-        "R-sleep-6",
-        "R-sleep-7",
-        "R-sleep-8",
-        "R-sleep-9",
-        "R-sleep-10"
-      ],
-      "loop": true,
-      "loopCount": 1,
-      "durationMs": 0,
-      "menu": true,
-      "label": "睡觉",
-      "frameMs": 1500
-    },
     "pray": {
       "behavior": "static",
       "frames": [

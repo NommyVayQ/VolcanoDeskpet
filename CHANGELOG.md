@@ -6,6 +6,24 @@
 
 > 本版重点：**站窗口顶边按旧版 Border 模型重写** + **补齐 11 条窗顶专属行为**。角色站上窗顶后能左右走、能坐窗边、能从窗边跃下，和站在地面完全一致。自检：tsc 0 错；verify-actions 140 动作 0 失败；`scripts/test-window-top.mjs` 40 项断言全通过；verify-build 结构性检查全过。
 
+### 新增：项目根目录 exe 启动器「启动桌宠.exe」
+- 双击即启动，**优先 dev 模式**（根目录跑 `npm run dev`：tsc/webpack watch + electron，改源码 Ctrl+R 生效）；
+  dev 前提不满足（缺 `node_modules/electron`、PATH 上没有 npm、package.json 无 dev 脚本）时**回退**到
+  `release/` 下版本号最高的便携版 `DeskPet.exe`；已在运行则不重复拉起。
+- 参数：`--dev` 强制 dev（不回退）/ `--release` 强制便携版 / `--list` 只列可用目标。
+- 构建：`npm run launcher`（`scripts/build-launcher.mjs`）。用 **Node SEA**（单文件可执行）打包 ——
+  本机没有可用编译器（csc.exe 被安全策略拦、dotnet 只有 runtime 没有 SDK），SEA 不需要编译器。
+- ⚠️ 产物 83MB（= node.exe 体积），**已加 .gitignore，不入库**；重新生成：`npm run launcher`。
+- ⚠️ 坑：SEA 的 sentinel fuse 名字**不是**官方文档写的那个。本机 node 二进制里是
+  `NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`（文档写 `...dfa6c7a0`），抄常量必然注入失败；
+  构建脚本改为**从宿主 node.exe 里扫出来**。
+
+### 移除：妮娜的单人睡觉动作
+- 删掉 `config/actions/nina.json` 的 `sleep`（10 帧静态循环 + 菜单项「睡觉」）与
+  `config/characters/nina.json` 漫游权重里的 `sleep` → 菜单不再出现、漫步也不再随机播。
+- 美术帧 `L/R-sleep-*` 保留在 `config/images/nina.json`（`frame-usage` 显示已无引用，随时可删）。
+- nina 动作 30 → 29，全量 `verify-actions` 139 个动作 0 失败。
+
 ### 新增：窗顶专属行为 11 条（`src/renderer/windowCeiling.ts`）
 - 出处（javap -c 读 `Nina Hand.jar` 字节码 + conf 原文实证，非猜测）：`behaviors.xml` L117-135 的「On Top of IE」条件组
   （Condition = `activeIE.topBorder.isOn(anchor)`，每条 `Hidden=true` → **不进右键菜单**），参数在 `actions.xml` L503-563。

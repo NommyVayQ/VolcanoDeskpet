@@ -16,6 +16,7 @@
     "verify-actions": "node scripts/verify-actions.mjs",
     "frame-usage": "node scripts/frame-usage.mjs",
     "repack-portable": "node scripts/repack-portable.mjs",
+  "launcher": "node scripts/build-launcher.mjs",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder"
   },
