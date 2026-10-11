@@ -5,6 +5,7 @@ import { SpriteResolver } from './SpriteResolver';
 import { eventBus, EVENTS } from './eventBus';
 import { ContextMenu } from './contextMenu';
 import { ManagerPanel } from './managerPanel';
+import { ActionPreviewPanel } from './actionPreview';
 import { setUpdaterConfig, checkForUpdates, setPendingUpdate } from './updater';
 import { initMouseTracker } from './mouse';
 import { WindowInteract } from './windowInteract';
@@ -38,9 +39,11 @@ let assetDir = '';
 let lastTickerTime = 0; // 渲染心跳：上次 ticker 帧的时间戳（>1s 无帧 = 渲染循环卡死）
 let meetCfg: MeetConfig = { chance: 0.02, distance: 200, rollInterval: 500 };
 // 窗口互动配置（顶层 "window" 字段）：可互动窗口白名单 + 「搬走并甩出窗口」自动开关
-let winCfg: WindowConfig = { whitelist: [], throwEnabled: false, throwRollMs: 60000, throwChance: 0.3 };
+let winCfg: WindowConfig = { whitelist: [], throwEnabled: false, throwRollMs: 60000, throwChance: 0.3,
+  ledgeEnabled: false, ledgeRollMs: 45000, ledgeChance: 0.08, topBehaviorEnabled: true };
 let lastRoll = 0; // 上次掷骰时间戳（节流）
 let lastThrowRoll = 0; // 上次窗口投掷掷骰时间戳（节流）
+let lastLedgeRoll = 0; // 上次窗口挂窗沿掷骰时间戳（节流）
 const petUpdateErrLogged = new WeakSet<Pet>(); // 每只宠物只记录一次 update 异常，避免日志刷屏
 
 // —— 鼠标穿透单一真相源 ——
@@ -75,7 +78,7 @@ function reconcile(x: number, y: number) {
   // 故此处不再用 falling 强制 block。
   const hoveredFalling = !!hovered && hovered.isFalling();
   const blocked = Pet.menuOpen || dragging || ManagerPanel.isOpen || WindowListPanel.isOpen
-    || SettingsPanel.isOpen || AboutPanel.isOpen;
+    || SettingsPanel.isOpen || AboutPanel.isOpen || ActionPreviewPanel.isOpen;
   // 捕获条件：阻塞态(拖拽/菜单/面板) 或 光标压在任意角色上。
   // 「角色任何时候都能被点击」= 只要 overPet 就捕获，不记忆任何「刚落地/刚释放」状态
   // （旧版 freedPet 释放保护会在角色刚落地时强制穿透，导致光标压在角色上点不中）。
@@ -100,7 +103,7 @@ function reconcile(x: number, y: number) {
       level: 'system',
       category: 'mouseThrough.transition',
       before: { mouseThrough: prevThrough },
-      after: { mouseThrough, overPet, hovered: hovered?.config.id ?? null, blocked, dragging, hoveredFalling, menuOpen: Pet.menuOpen, panelOpen: ManagerPanel.isOpen, settingsOpen: SettingsPanel.isOpen, aboutOpen: AboutPanel.isOpen, supervisorOpen: SupervisorPanel.isOpen },
+      after: { mouseThrough, overPet, hovered: hovered?.config.id ?? null, blocked, dragging, hoveredFalling, menuOpen: Pet.menuOpen, panelOpen: ManagerPanel.isOpen, settingsOpen: SettingsPanel.isOpen, aboutOpen: AboutPanel.isOpen, previewOpen: ActionPreviewPanel.isOpen, supervisorOpen: SupervisorPanel.isOpen },
     });
   }
 }
@@ -176,7 +179,9 @@ async function init() {
   // 窗口互动配置：可搬运窗口白名单（按标题包含匹配）+ 自动「搬走窗口」开关（默认关）
   winCfg = loadWindowConfig(configDir);
   log('info', 'window config: whitelist=[' + winCfg.whitelist.join('/') + '] throwEnabled='
-    + winCfg.throwEnabled + ' rollMs=' + winCfg.throwRollMs + ' chance=' + winCfg.throwChance);
+    + winCfg.throwEnabled + ' rollMs=' + winCfg.throwRollMs + ' chance=' + winCfg.throwChance
+    + ' | ledgeEnabled=' + winCfg.ledgeEnabled + ' ledgeRollMs=' + winCfg.ledgeRollMs + ' ledgeChance=' + winCfg.ledgeChance
+    + ' | topBehaviorEnabled=' + winCfg.topBehaviorEnabled + '（站窗顶时的专属行为组）');
   log('info', 'configDir=' + configDir);
 
   // 版本更新配置：载入后做静默自动检查（方案 A：仅提示 + 下载页，不自动下载/替换）
@@ -229,6 +234,7 @@ async function init() {
   const contextMenu = new ContextMenu();
   const managerPanel = new ManagerPanel(supervisorPanel); // 传 supervisor 引用，让面板顶部显示「🔧 调试」按钮
   winInteract = new WindowInteract(resolver);
+  winInteract.setTopBehaviorEnabled(winCfg.topBehaviorEnabled); // 窗顶专属行为组开关
   // 设置面板（右键「设置」）：收纳窗口互动配置 + 「关于」入口。
   // 注意面板在构造时会捕获 winOk，故先探测 koffi 可用性再建面板。
   const winOk = await winInteract.isAvailable();
@@ -259,6 +265,8 @@ async function init() {
     openWindowList: () => { void windowListPanel.show(); },
   });
   const aboutPanel = new AboutPanel();
+  // 动作预览面板（只读，2026-10-03）：系统托盘呼出。需 resolver 才能读 config/images 的帧名映射。
+  const actionPreview = new ActionPreviewPanel(configDir, resolver);
   // 系统托盘「角色管理面板」：打开即算阻塞态，reconcile 会强制窗口捕获点击，使面板可操作；
   // 关闭后下一个 mousemove 自动重算穿透态。
   ipcRenderer.on('open-manager-panel', () => {
@@ -268,6 +276,8 @@ async function init() {
   // 托盘「设置」/「关于」：与右键菜单同一入口
   ipcRenderer.on('open-settings-panel', () => { settingsPanel.show(winCfg); reconcile(0, 0); });
   ipcRenderer.on('open-about-panel', () => { void aboutPanel.show(); reconcile(0, 0); });
+  // 托盘「动作预览」：只读预览器。打开即阻塞（reconcile 强制捕获点击，否则面板点不动）。
+  ipcRenderer.on('open-action-preview-panel', () => { actionPreview.show(); reconcile(0, 0); });
   // 托盘「窗口归还」：与「设置」并列的一次性动作（2026-09-26 拍板从设置面板移出）。
   // 经 renderer 走 WindowInteract.restoreWindows()——先 stop() 中止在演的抛掷/搬运，再归还，避免动画抢窗口。
   ipcRenderer.on('win-restore-request', () => { void winInteract?.restoreWindows(); });
@@ -338,10 +348,10 @@ async function init() {
       // 「抛掷窗口」= nina.json 的 windowThrow 动作（windowMode:'throw'），数据驱动、按角色配置出现。
       if (def.windowMode === 'carry') winInteract?.startCarry(pet);
       else if (def.windowMode === 'throw') manualWindowThrow(pet);
-      else winInteract?.startLedge(pet);
+      else winInteract?.bindToWindow(pet);
       return;
     }
-    if (pet.isWindowHeld) winInteract?.stop(); // 其他动作打断窗口占用
+    if (pet.isWindowHeld) winInteract?.releaseFor(pet); // 其他动作打断窗口占用（只放这只，不动别人）
     const runNow = () => {
       // ⚠️ 判断顺序：**pairTrigger 必须排在 coop 之前**（2026-10-01 修）。
       //   合体动作（双人合照帧）同时带 `coop:true` 与 `pairTrigger:true`，
@@ -417,6 +427,16 @@ async function init() {
     runNow();
   });
 
+  // ⚠️ 拖放到窗口上**不在这里处理**（2026-10-10 用户要求「竖直位移也去掉，不连贯」）。
+  // 早期版本在这里命中窗口就 `bindToWindow` 就地吸附 —— 角色会从鼠标位置**瞬移**到窗口顶边
+  // （脚底对齐 `win.y`），横向/纵向都跳一下，非常不连贯。
+  // 旧版 Shimeji 的 `Thrown` 是这么做的：松手 → `Falling(InitialVX=cursor.dx, InitialVY=cursor.dy)`
+  // 走完整抛物线 → 落地那一刻才判 `floor.isOn(anchor) || activeIE.topBorder.isOn(anchor)`，
+  // **落在哪算哪**（落在窗顶上就站窗顶、落到地面就站地面），全程没有任何吸附/瞬移。
+  // 本程序对应实现 = `WindowInteract.update()` 里的「窗顶穿越检测」：角色自由下落，
+  // 脚底从上方穿过窗顶时才 `bindNow`，位移只剩最后一帧的下落量（连贯，就是一次落地）。
+  // 所以这里什么都不做，物理接管即可。
+
   app.ticker.add((ticker) => {
     // 渲染心跳检测：两次帧间隔 > 1s → 渲染循环可能卡死（Electron 渲染进程僵死）
     const nowTick = performance.now();
@@ -432,6 +452,10 @@ async function init() {
     // PIXI v8 Ticker 没有 lastFrame，用 ticker.frameID；frame=本次自增计数
     supervisorLog.tickFrame(((ticker as any).frameID ?? 0) as number);
     const dt = ticker.deltaTime;
+    // 窗口交互**必须先于**宠物物理执行：
+    //   `syncBound` 要把「窗口这一帧的位移」搬到角色身上、并把地面(`groundOverrideY`)抬到窗顶高度，
+    //   若放在 p.update() 之后，宠物会用**上一帧的地面**跑物理 → 窗口移动时角色滞后一帧、踩空判定抖动。
+    winInteract?.update(pets);
     // 单宠 update 异常隔离：避免一只宠物抛错导致 pets.forEach 中断、其余宠物全部冻结
     for (const p of pets) {
       try {
@@ -443,7 +467,6 @@ async function init() {
         }
       }
     }
-    winInteract?.update(); // 窗口交互（搬运/挂窗沿）位置同步
 
     // —— 概率相遇调度（带节流）：每隔 rollInterval 对各对掷骰，够近且静止/走动才走近 ——
     const now = performance.now();
@@ -455,6 +478,11 @@ async function init() {
     if (winCfg.throwEnabled && now - lastThrowRoll >= winCfg.throwRollMs) {
       lastThrowRoll = now;
       maybeThrowWindow();
+    }
+    // 挂窗沿：nina 低频自动跳上窗口顶边（复刻旧版ニナ「站在可抛掷的窗口上」；config.window.ledgeEnabled 默认 true）
+    if (winCfg.ledgeEnabled && now - lastLedgeRoll >= winCfg.ledgeRollMs) {
+      lastLedgeRoll = now;
+      maybeLedgeWindow();
     }
     // 走近中的角色：够近就切「演关键帧」
     for (const p of pets) {
@@ -753,7 +781,15 @@ async function init() {
     }
     const list = pairListBetween(a, b);
     if (list.length === 0) return false;
-    const pair = (pairId && list.find((p: any) => p.id === pairId)) || pickPair(list);
+    // ⚠️ pairId 命中校验：菜单点配对若给了 pairId 却没匹配到，说明 meetRules 漏配——
+    // 此时**绝不**回退到 pickPair 随机选（否则会播到无关的做饭/睡觉等动作，正是「点A播B」的根因）。
+    // 直接告警并跳过，让现象可见、可调；只有「没给 pairId」才允许随机挑（保留「惊喜一下」语义）。
+    const exact = pairId ? list.find((p: any) => p.id === pairId) : undefined;
+    if (pairId && !exact) {
+      log('warn', `配对 ${pairId} 在 ${a.config.id}<->${b.config.id} 的 meetRules 中找不到对应 pair.id，已跳过（未随机回退）`);
+      return false;
+    }
+    const pair = exact || pickPair(list);
     const { owner, other: otherPet } = pairOwner(a, b, pair);
     const selfId = pair.self || (owner.config.interactAction || 'interact');
     const otherId = pair.other || (otherPet.config.interactAction || 'interact');
@@ -796,6 +832,29 @@ async function init() {
       const pet = cand[Math.floor(Math.random() * cand.length)];
       log('info', '[winthrow] 自动掷骰命中：' + pet.config.name + ' 去搬窗口');
       await winInteract?.startThrowShow(pet, winCfg.whitelist);
+    } catch { /* 任何异常都不影响主循环 */ }
+  }
+
+  /** 窗口挂窗沿自动掷骰（复刻旧版ニナ「站在可抛掷的窗口上」）：低频掷骰，nina 空闲时站上最靠前窗口的顶边。
+   *  config.window.ledgeEnabled 默认 true（写在 config.json 里，不进右键菜单、无手动入口）。
+   *  只针对 nina——这是旧版ニナ的招牌行为，其它角色不加，避免乱占窗口。
+   *  ⚠️ **完全照旧版**：**没有**「走过去再跳上去」的演出——直接把 nina 摆到窗口顶边（旧版 = Move 到那条 Border），
+   *     之后由 WindowInteract 每帧跟随窗口；若 nina 此刻不在地面，先落地再站（避免半空被锁位）。 */
+  async function maybeLedgeWindow() {
+    try {
+      if (Math.random() > winCfg.ledgeChance) return;
+      if (!winInteract) return;
+      if (!(await winInteract.isAvailable())) return; // winapi 不可用则跳过，不打扰
+      const cand = pets.filter((p) => p.config.id === 'nina' && !p.isLeaving() && !p.isWindowHeld
+        && !p.isDraggingAction() && !p.isWalkingToTarget && p.isIdleOrWalk());
+      if (cand.length === 0) return;
+      const pet = cand[0];
+      log('info', '[winledge] 自动掷骰命中：' + pet.config.name + ' 站上窗口顶边');
+      if (!pet.isGroundBound()) {
+        pet.queueOnLandAndDrop(() => { void winInteract?.bindToWindow(pet); }, resolver);
+      } else {
+        await winInteract.bindToWindow(pet);
+      }
     } catch { /* 任何异常都不影响主循环 */ }
   }
 
@@ -976,7 +1035,7 @@ export function removePet(id: string): boolean {
   // isLeaving() 而非 isRemoving：退场前还有一段「先掉回地面」的等待期，
   // 那期间 isRemoving 仍是 false，用旧判断会二次触发 beginRemove → 人还在半空就被 stage.removeChild 抹掉。
   if (pet.isLeaving()) return true;
-  if (pet.isWindowHeld) winInteract?.stop(); // 窗口占用中先释放
+  if (pet.isWindowHeld) winInteract?.releaseFor(pet); // 窗口占用中先释放（只放这只，不动别人）
   pet.beginRemove(resolver).then(() => {
     try { app.stage.removeChild(pet.container); } catch { /* noop */ }
     const i = pets.indexOf(pet);

@@ -70,6 +70,12 @@ export interface WindowConfig {
   throwEnabled: boolean; // 是否自动掷骰发起「搬走并甩出窗口」演出（默认 false，避免擅自搬动用户的窗口）
   throwRollMs: number;   // 自动掷骰周期(ms)
   throwChance: number;   // 每次掷骰命中概率 0~1
+  ledgeEnabled: boolean; // 是否自动掷骰让 nina「站上窗口」挂窗沿（复刻旧版ニナ；默认 false，避免擅自占用窗口）
+  ledgeRollMs: number;   // 自动掷骰周期(ms)
+  ledgeChance: number;   // 每次掷骰命中概率 0~1
+  /** 站在窗顶时是否自发「窗顶专属行为」组：沿窗顶走/跑/爬、坐窗边、从窗边跳下
+   *  （复刻 behaviors.xml 的 "On Top of IE" 条件组，全部 Hidden → 不进右键菜单）。默认 true。 */
+  topBehaviorEnabled: boolean;
 }
 const DEFAULT_WINDOW: WindowConfig = {
   // 原桌宠 ニナ/conf/settings.properties 的 InteractiveWindows 原样照搬。
@@ -80,6 +86,10 @@ const DEFAULT_WINDOW: WindowConfig = {
   throwEnabled: false,
   throwRollMs: 60000,
   throwChance: 0.3,
+  ledgeEnabled: false,
+  ledgeRollMs: 45000,
+  ledgeChance: 0.08,
+  topBehaviorEnabled: true,
 };
 
 /** 更新检查配置（顶层 "update" 字段）：检查地址 / 是否自动检查 / 频道。 */
@@ -527,5 +537,10 @@ export function loadWindowConfig(configDir: string): WindowConfig {
     throwRollMs: typeof w.throwRollMs === 'number' && w.throwRollMs > 0 ? w.throwRollMs : DEFAULT_WINDOW.throwRollMs,
     throwChance: typeof w.throwChance === 'number'
       ? Math.max(0, Math.min(1, w.throwChance)) : DEFAULT_WINDOW.throwChance,
+    ledgeEnabled: w.ledgeEnabled === true,
+    ledgeRollMs: typeof w.ledgeRollMs === 'number' && w.ledgeRollMs > 0 ? w.ledgeRollMs : DEFAULT_WINDOW.ledgeRollMs,
+    ledgeChance: typeof w.ledgeChance === 'number'
+      ? Math.max(0, Math.min(1, w.ledgeChance)) : DEFAULT_WINDOW.ledgeChance,
+    topBehaviorEnabled: w.topBehaviorEnabled !== false, // 缺省 true：这就是旧版站上窗顶的常态
   };
 }

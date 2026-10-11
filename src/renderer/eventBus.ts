@@ -26,4 +26,5 @@ export const EVENTS = {
   PET_INTERACT: 'pet:interact',
   USER_CLICK: 'user:click',
   PET_MENU_ACTION: 'pet:menu-action',
+  PET_DROP: 'pet:drop',
 };

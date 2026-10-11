@@ -63,6 +63,8 @@
     "唔",
     "别这样啦…"
   ],
+  "wanderTauMs": 5000,
+  "wanderMinDelayMs": 4000,
   "wanderRecentExempt": [
     "walk"
   ],
@@ -73,27 +75,27 @@
     },
     {
       "id": "creep",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "sit",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "eat",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "read",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "sing",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "playingSword",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "shakeHead",

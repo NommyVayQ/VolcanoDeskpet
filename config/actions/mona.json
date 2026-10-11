@@ -2,39 +2,75 @@
   "actions": {
     "stand": {
       "behavior": "static",
-      "frames": ["L-stand-1"],
-      "rightFrames": ["R-stand-1"],
+      "frames": [
+        "L-stand-1"
+      ],
+      "rightFrames": [
+        "R-stand-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "站立",
-      "frameMs": 800,
+      "frameMs": 6000,
       "durationMs": 0
     },
     "walk": {
       "behavior": "walk",
       "frames": [
-        { "name": "L-walk-1", "vx": 1.2 },
-        { "name": "L-walk-2", "vx": 1.2 },
-        { "name": "L-walk-3", "vx": 1.2 },
-        { "name": "L-walk-4", "vx": 1.2 }
+        {
+          "name": "L-walk-1",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-2",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-3",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-4",
+          "vx": 1.2
+        }
       ],
       "rightFrames": [
-        { "name": "R-walk-1", "vx": 1.2 },
-        { "name": "R-walk-2", "vx": 1.2 },
-        { "name": "R-walk-3", "vx": 1.2 },
-        { "name": "R-walk-4", "vx": 1.2 }
+        {
+          "name": "R-walk-1",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-2",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-3",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-4",
+          "vx": 1.2
+        }
       ],
       "loop": true,
       "moveSpeed": 1.2,
       "menu": false,
       "label": "走路",
       "frameMs": 500,
-      "durationMs": 10000
+      "durationMs": 12000
     },
     "drag": {
       "behavior": "drag",
-      "frames": ["L-swing-1", "L-swing-3", "L-swing-2"],
-      "rightFrames": ["R-swing-1", "R-swing-2", "R-swing-3"],
+      "frames": [
+        "L-swing-1",
+        "L-swing-3",
+        "L-swing-2"
+      ],
+      "rightFrames": [
+        "R-swing-1",
+        "R-swing-2",
+        "R-swing-3"
+      ],
       "label": "拖拽",
       "menu": false,
       "frameMs": 1600,
@@ -42,8 +78,12 @@
     },
     "drag-idle": {
       "behavior": "drag",
-      "frames": ["L-swing-1"],
-      "rightFrames": ["R-swing-1"],
+      "frames": [
+        "L-swing-1"
+      ],
+      "rightFrames": [
+        "R-swing-1"
+      ],
       "label": "拖拽静止",
       "menu": false,
       "frameMs": 1600,
@@ -52,19 +92,42 @@
     "climb": {
       "behavior": "climb",
       "frames": [
-        { "name": "L-climb-1", "vy": 0, "ms": 700 },
-        { "name": "L-climb-2", "vy": 2, "ms": 250 },
-        { "name": "L-climb-3", "vy": 1, "ms": 250 }
+        {
+          "name": "L-climb-1",
+          "vy": 0,
+          "ms": 700
+        },
+        {
+          "name": "L-climb-2",
+          "vy": 2,
+          "ms": 250
+        },
+        {
+          "name": "L-climb-3",
+          "vy": 1,
+          "ms": 250
+        }
       ],
       "rightFrames": [
-        { "name": "R-climb-1", "vy": 0, "ms": 700 },
-        { "name": "R-climb-2", "vy": 2, "ms": 250 },
-        { "name": "R-climb-3", "vy": 1, "ms": 250 }
+        {
+          "name": "R-climb-1",
+          "vy": 0,
+          "ms": 700
+        },
+        {
+          "name": "R-climb-2",
+          "vy": 2,
+          "ms": 250
+        },
+        {
+          "name": "R-climb-3",
+          "vy": 1,
+          "ms": 250
+        }
       ],
       "loop": true,
       "moveSpeed": 1,
       "menu": true,
-      "menuOrder": 10,
       "label": "边缘攀爬",
       "frameMs": 800,
       "durationMs": 25000
@@ -74,10 +137,22 @@
       "flyMode": "free",
       "width": 150,
       "height": 200,
-      "frames": ["L-flymoving-1", "L-flymoving-2"],
-      "rightFrames": ["R-flymoving-1", "R-flymoving-2"],
-      "hoverFrames": ["L-fly-1", "L-fly-2"],
-      "hoverRightFrames": ["R-fly-1", "R-fly-2"],
+      "frames": [
+        "L-flymoving-1",
+        "L-flymoving-2"
+      ],
+      "rightFrames": [
+        "R-flymoving-1",
+        "R-flymoving-2"
+      ],
+      "hoverFrames": [
+        "L-fly-1",
+        "L-fly-2"
+      ],
+      "hoverRightFrames": [
+        "R-fly-1",
+        "R-fly-2"
+      ],
       "loop": true,
       "moveSpeed": 1.5,
       "flyMoveMinMs": 1100,
@@ -89,17 +164,31 @@
       "label": "乱飞",
       "frameMs": 750,
       "durationMs": 5000,
-      "next": ["fall"]
+      "next": [
+        "fall"
+      ]
     },
     "flyCeiling": {
       "behavior": "fly",
       "flyMode": "ceiling",
       "width": 150,
       "height": 200,
-      "frames": ["L-flymoving-1", "L-flymoving-2"],
-      "rightFrames": ["R-flymoving-1", "R-flymoving-2"],
-      "hoverFrames": ["L-fly-1", "L-fly-2"],
-      "hoverRightFrames": ["R-fly-1", "R-fly-2"],
+      "frames": [
+        "L-flymoving-1",
+        "L-flymoving-2"
+      ],
+      "rightFrames": [
+        "R-flymoving-1",
+        "R-flymoving-2"
+      ],
+      "hoverFrames": [
+        "L-fly-1",
+        "L-fly-2"
+      ],
+      "hoverRightFrames": [
+        "R-fly-1",
+        "R-fly-2"
+      ],
       "loop": true,
       "moveSpeed": 2.3,
       "flyMoveMinMs": 1100,
@@ -111,12 +200,22 @@
       "label": "贴顶飞行",
       "frameMs": 750,
       "durationMs": 0,
-      "next": ["fall"]
+      "next": [
+        "fall"
+      ]
     },
     "bye": {
       "behavior": "static",
-      "frames": ["disappear-1", "disappear-8", "disappear-9"],
-      "rightFrames": ["disappear-1", "disappear-8", "disappear-9"],
+      "frames": [
+        "disappear-1",
+        "disappear-8",
+        "disappear-9"
+      ],
+      "rightFrames": [
+        "disappear-1",
+        "disappear-8",
+        "disappear-9"
+      ],
       "loop": false,
       "menu": false,
       "label": "消失",
@@ -125,8 +224,14 @@
     },
     "fall": {
       "behavior": "static",
-      "frames": ["L-fall-1", "L-fall-2"],
-      "rightFrames": ["R-fall-1", "R-fall-2"],
+      "frames": [
+        "L-fall-1",
+        "L-fall-2"
+      ],
+      "rightFrames": [
+        "R-fall-1",
+        "R-fall-2"
+      ],
       "loop": true,
       "label": "掉落（空中）",
       "menu": false,
@@ -135,8 +240,14 @@
     },
     "tripping": {
       "behavior": "static",
-      "frames": ["L-fall-3", "L-fall-4"],
-      "rightFrames": ["R-fall-3", "R-fall-4"],
+      "frames": [
+        "L-fall-3",
+        "L-fall-4"
+      ],
+      "rightFrames": [
+        "R-fall-3",
+        "R-fall-4"
+      ],
       "loop": false,
       "menu": false,
       "label": "摔倒",
@@ -146,20 +257,68 @@
     "creep": {
       "behavior": "walk",
       "frames": [
-        { "name": "L-creep-1", "vx": 0, "ms": 700 },
-        { "name": "L-creep-2", "vx": 0, "ms": 500 },
-        { "name": "L-creep-1", "vx": 2, "ms": 100 },
-        { "name": "L-creep-1", "vx": 1.33, "ms": 100 },
-        { "name": "L-creep-1", "vx": 0.67, "ms": 100 },
-        { "name": "L-creep-1", "vx": 0, "ms": 600 }
+        {
+          "name": "L-creep-1",
+          "vx": 0,
+          "ms": 700
+        },
+        {
+          "name": "L-creep-2",
+          "vx": 0,
+          "ms": 500
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 2,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 1.33,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 0.67,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 0,
+          "ms": 600
+        }
       ],
       "rightFrames": [
-        { "name": "R-creep-1", "vx": 0, "ms": 700 },
-        { "name": "R-creep-2", "vx": 0, "ms": 500 },
-        { "name": "R-creep-1", "vx": 2, "ms": 100 },
-        { "name": "R-creep-1", "vx": 1.33, "ms": 100 },
-        { "name": "R-creep-1", "vx": 0.67, "ms": 100 },
-        { "name": "R-creep-1", "vx": 0, "ms": 600 }
+        {
+          "name": "R-creep-1",
+          "vx": 0,
+          "ms": 700
+        },
+        {
+          "name": "R-creep-2",
+          "vx": 0,
+          "ms": 500
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 2,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 1.33,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 0.67,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 0,
+          "ms": 600
+        }
       ],
       "loop": true,
       "menu": true,
@@ -170,8 +329,12 @@
     },
     "sit": {
       "behavior": "static",
-      "frames": ["L-sit-1"],
-      "rightFrames": ["R-sit-1"],
+      "frames": [
+        "L-sit-1"
+      ],
+      "rightFrames": [
+        "R-sit-1"
+      ],
       "loop": true,
       "menu": true,
       "menuOrder": 14,
@@ -181,7 +344,9 @@
     },
     "shakeleg": {
       "behavior": "static",
-      "offset": { "y": 12 },
+      "offset": {
+        "y": 12
+      },
       "frames": [
         "L-shakeleg-1",
         "L-shakeleg-2",
@@ -268,7 +433,9 @@
       "menu": true,
       "menuOrder": 19,
       "label": "唱歌",
-      "dialogue": ["♪ ～"],
+      "dialogue": [
+        "♪ ～"
+      ],
       "frameMs": 800
     },
     "eat": {
@@ -308,7 +475,9 @@
       "menu": true,
       "menuOrder": 20,
       "label": "吃东西",
-      "dialogue": ["唔……好吃。"],
+      "dialogue": [
+        "唔……好吃。"
+      ],
       "dialogueFrame": -3,
       "frameMs": 900
     },
@@ -350,7 +519,7 @@
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 21,
       "menuGroup": "做饭",
       "label": "面包",
@@ -364,8 +533,14 @@
         "L-meat-3",
         "L-meat-2",
         "L-meat-3",
-        { "name": "L-meat-4", "ms": 2000 },
-        { "name": "L-sup-1", "ms": 2400 }
+        {
+          "name": "L-meat-4",
+          "ms": 2000
+        },
+        {
+          "name": "L-sup-1",
+          "ms": 2400
+        }
       ],
       "rightFrames": [
         "R-meat-1",
@@ -373,12 +548,18 @@
         "R-meat-3",
         "R-meat-2",
         "R-meat-3",
-        { "name": "R-meat-4", "ms": 2000 },
-        { "name": "R-sup-1", "ms": 2400 }
+        {
+          "name": "R-meat-4",
+          "ms": 2000
+        },
+        {
+          "name": "R-sup-1",
+          "ms": 2400
+        }
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 22,
       "menuGroup": "做饭",
       "label": "营养胡萝卜肉",
@@ -418,7 +599,7 @@
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 23,
       "menuGroup": "做饭",
       "label": "冰沙",
@@ -470,7 +651,7 @@
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 24,
       "menuGroup": "做饭",
       "label": "奶冻",
@@ -522,7 +703,7 @@
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 25,
       "menuGroup": "做饭",
       "label": "葡萄酒",
@@ -552,7 +733,10 @@
         "L-fishing-6",
         "L-fishing-7",
         "L-fishing-squ1",
-        { "name": "L-fishing-squ2", "ms": 1800 },
+        {
+          "name": "L-fishing-squ2",
+          "ms": 1800
+        },
         "L-fishing-squ3"
       ],
       "rightFrames": [
@@ -576,12 +760,15 @@
         "R-fishing-6",
         "R-fishing-7",
         "R-fishing-squ1",
-        { "name": "R-fishing-squ2", "ms": 1800 },
+        {
+          "name": "R-fishing-squ2",
+          "ms": 1800
+        },
         "R-fishing-squ3"
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 30,
       "menuGroup": "钓鱼",
       "label": "鱿鱼",
@@ -611,7 +798,10 @@
         "L-fishing-6",
         "L-fishing-7",
         "L-fishing-oct1",
-        { "name": "L-fishing-oct2", "ms": 2300 },
+        {
+          "name": "L-fishing-oct2",
+          "ms": 2300
+        },
         "L-fishing-oct3"
       ],
       "rightFrames": [
@@ -635,12 +825,15 @@
         "R-fishing-6",
         "R-fishing-7",
         "R-fishing-oct1",
-        { "name": "R-fishing-oct2", "ms": 2300 },
+        {
+          "name": "R-fishing-oct2",
+          "ms": 2300
+        },
         "R-fishing-oct3"
       ],
       "loop": false,
       "durationMs": 0,
-      "menu": true,
+      "menu": false,
       "menuOrder": 31,
       "menuGroup": "钓鱼",
       "label": "章鱼",
@@ -670,7 +863,10 @@
         "L-fishing-6",
         "L-fishing-7",
         "L-fishing-hot1",
-        { "name": "L-fishing-hot2", "ms": 2300 },
+        {
+          "name": "L-fishing-hot2",
+          "ms": 2300
+        },
         "L-fishing-hot3"
       ],
       "rightFrames": [
@@ -694,7 +890,10 @@
         "R-fishing-6",
         "R-fishing-7",
         "R-fishing-hot1",
-        { "name": "R-fishing-hot2", "ms": 2300 },
+        {
+          "name": "R-fishing-hot2",
+          "ms": 2300
+        },
         "R-fishing-hot3"
       ],
       "loop": false,
@@ -729,7 +928,10 @@
         "L-fishing-6",
         "L-fishing-7",
         "L-fishing-big1",
-        { "name": "L-fishing-big2", "ms": 1800 },
+        {
+          "name": "L-fishing-big2",
+          "ms": 1800
+        },
         "L-fishing-big3"
       ],
       "rightFrames": [
@@ -753,7 +955,10 @@
         "R-fishing-6",
         "R-fishing-7",
         "R-fishing-big1",
-        { "name": "R-fishing-big2", "ms": 1800 },
+        {
+          "name": "R-fishing-big2",
+          "ms": 1800
+        },
         "R-fishing-big3"
       ],
       "loop": false,
@@ -788,7 +993,10 @@
         "L-fishing-6",
         "L-fishing-7",
         "L-fishing-weed1",
-        { "name": "L-fishing-weed2", "ms": 1800 },
+        {
+          "name": "L-fishing-weed2",
+          "ms": 1800
+        },
         "L-fishing-weed3"
       ],
       "rightFrames": [
@@ -812,7 +1020,10 @@
         "R-fishing-6",
         "R-fishing-7",
         "R-fishing-weed1",
-        { "name": "R-fishing-weed2", "ms": 1800 },
+        {
+          "name": "R-fishing-weed2",
+          "ms": 1800
+        },
         "R-fishing-weed3"
       ],
       "loop": false,
@@ -823,15 +1034,56 @@
       "label": "海草",
       "frameMs": 1200
     },
-    "pair_rose": { "pairTrigger": true, "menuGroup": "合体", "pairWith": "rose", "pairId": "sing", "menu": true, "label": "和露丝一起唱歌", "menuOrder": 1 },
-    "pair_rose_eat": { "pairTrigger": true, "menuGroup": "合体", "pairWith": "rose", "pairId": "eat", "menu": true, "label": "做面包给露丝吃", "menuOrder": 2 },
-    "pair_nina": { "pairTrigger": true, "menuGroup": "合体", "pairWith": "nina", "menu": true, "label": "给妮娜做奶冻" },
-    "pair_gwen": { "pairTrigger": true, "menuGroup": "合体", "pairWith": "gwen", "menu": true, "label": "给温妮做雪花冰沙" },
-    "pair_rebeza": { "pairTrigger": true, "menuGroup": "合体", "pairWith": "rebeza", "menu": true, "label": "做葡萄酒给雷贝莎" },
+    "pair_rose": {
+      "pairTrigger": true,
+      "menuGroup": "合体",
+      "pairWith": "rose",
+      "pairId": "sing",
+      "menu": true,
+      "label": "和露丝一起唱歌",
+      "menuOrder": 1
+    },
+    "pair_rose_eat": {
+      "pairTrigger": true,
+      "menuGroup": "合体",
+      "pairWith": "rose",
+      "pairId": "eat",
+      "menu": true,
+      "label": "做面包给露丝吃",
+      "menuOrder": 2
+    },
+    "pair_nina": {
+      "pairTrigger": true,
+      "menuGroup": "合体",
+      "pairWith": "nina",
+      "pairId": "cook_nina",
+      "menu": true,
+      "label": "给妮娜做奶冻"
+    },
+    "pair_gwen": {
+      "pairTrigger": true,
+      "menuGroup": "合体",
+      "pairWith": "gwen",
+      "pairId": "cook_gwen",
+      "menu": true,
+      "label": "给温妮做雪花冰沙"
+    },
+    "pair_rebeza": {
+      "pairTrigger": true,
+      "menuGroup": "合体",
+      "pairWith": "rebeza",
+      "pairId": "cook_rebeza",
+      "menu": true,
+      "label": "做葡萄酒给雷贝莎"
+    },
     "jumpWindow": {
       "behavior": "static",
-      "frames": ["L-climb-1"],
-      "rightFrames": ["R-climb-1"],
+      "frames": [
+        "L-climb-1"
+      ],
+      "rightFrames": [
+        "R-climb-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "跳向窗口下角",
@@ -840,8 +1092,12 @@
     },
     "grabWindow": {
       "behavior": "static",
-      "frames": ["L-throw-1"],
-      "rightFrames": ["R-throw-1"],
+      "frames": [
+        "L-throw-1"
+      ],
+      "rightFrames": [
+        "R-throw-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "抓住窗口",
@@ -850,8 +1106,14 @@
     },
     "carryWindow": {
       "behavior": "static",
-      "frames": ["L-throw-1", "L-throw-2"],
-      "rightFrames": ["R-throw-1", "R-throw-2"],
+      "frames": [
+        "L-throw-1",
+        "L-throw-2"
+      ],
+      "rightFrames": [
+        "R-throw-1",
+        "R-throw-2"
+      ],
       "loop": true,
       "menu": false,
       "label": "扛着窗口",
@@ -860,8 +1122,12 @@
     },
     "throwWindow": {
       "behavior": "static",
-      "frames": ["L-throw-3"],
-      "rightFrames": ["R-throw-3"],
+      "frames": [
+        "L-throw-3"
+      ],
+      "rightFrames": [
+        "R-throw-3"
+      ],
       "loop": false,
       "menu": false,
       "label": "甩出窗口",
@@ -870,8 +1136,12 @@
     },
     "windowThrow": {
       "behavior": "static",
-      "frames": ["L-throw-2"],
-      "rightFrames": ["R-throw-2"],
+      "frames": [
+        "L-throw-2"
+      ],
+      "rightFrames": [
+        "R-throw-2"
+      ],
       "loop": true,
       "menu": true,
       "label": "抛掷窗口",
@@ -914,7 +1184,9 @@
       "loopCount": 1,
       "durationMs": 0,
       "flip": false,
-      "offset": { "x": 51 }
+      "offset": {
+        "x": 51
+      }
     },
     "pair_nina_mona": {
       "behavior": "static",
@@ -959,7 +1231,9 @@
       "loopCount": 1,
       "durationMs": 0,
       "flip": false,
-      "offset": { "x": 52 }
+      "offset": {
+        "x": 52
+      }
     },
     "pair_mona_gwen": {
       "behavior": "static",
@@ -989,7 +1263,9 @@
       "frameMs": 1200,
       "loopCount": 1,
       "durationMs": 0,
-      "offset": { "x": 52 }
+      "offset": {
+        "x": 52
+      }
     }
   }
 }

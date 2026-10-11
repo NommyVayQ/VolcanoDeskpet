@@ -2,6 +2,97 @@
 
 所有显著变更都会记录在这里。版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [6.2.0] - 2026-10-11
+
+> 本版重点：**站窗口顶边按旧版 Border 模型重写** + **补齐 11 条窗顶专属行为**。角色站上窗顶后能左右走、能坐窗边、能从窗边跃下，和站在地面完全一致。自检：tsc 0 错；verify-actions 140 动作 0 失败；`scripts/test-window-top.mjs` 40 项断言全通过；verify-build 结构性检查全过。
+
+### 新增：窗顶专属行为 11 条（`src/renderer/windowCeiling.ts`）
+- 出处（javap -c 读 `Nina Hand.jar` 字节码 + conf 原文实证，非猜测）：`behaviors.xml` L117-135 的「On Top of IE」条件组
+  （Condition = `activeIE.topBorder.isOn(anchor)`，每条 `Hidden=true` → **不进右键菜单**），参数在 `actions.xml` L503-563。
+- 11 条：WalkAlong / RunAlong / CrawlAlongIECeiling（权重 10，其余 100）、SitOnTheLeft|RightEdgeOfIE、
+  JumpFromLeft|RightEdgeOfIE、WalkLeft|RightAlongIEAndSit、WalkLeft|RightAlongIEAndJump。
+- 单位换算留档：旧版 Velocity = px/tick(40ms)，本引擎 = px/帧(60fps) → **除以 2.4**。
+  Run = 同一套走帧 ×2 速（旧版 Walk=2 / Run=4），不加新动作。
+- 开关：`config/config.json` → `window.topBehaviorEnabled`（缺省 true）。
+
+### 重写：站窗口 = 站在一条「地面」上（不再是外挂状态机）
+- 旧版语义（字节码实证）：`Border` 只有 `isOn(Point)` / `move(Point)`；`getFloor()` **每帧按锚点实时判定、无持久绑定状态**；
+  `BorderedAction.tick()` 唯一一行 = `setAnchor(border.move(getAnchor()))`；站不住 → `LostGroundException` → 播下落。
+- 本程序等价实现：窗顶 = **地面**（`Pet.groundOverrideY` + `onWindowTop`，`baselineY()` 优先取它）。
+  走/跑/待机/做动作全由 Pet 自己跑，与地面一致。**删除**了此前五版外挂状态机（单槽 ledge 互抢刷屏、±40 容差带、
+  「走过去跳上去」演出、竖直脱离阈值、每帧重夹）及其全部参数。
+- 跟随复刻 `Border.move()` 的守卫阈值：`FOLLOW_MAX_DX=80` / `FOLLOW_MAX_DOWN=20` / `FOLLOW_MAX_UP=80`；
+  脱离判定**只看横向**（锚点=脚底中心是否还在 `[w.x, w.x+w.w]`）。`window.ledgeEnabled` 改 **false**（旧版无自动站窗）。
+
+### 修复：跳下后被自己的穿越检测接回窗顶（P0）
+- 根因：`gravity` 实际是 **0.5**（不是 Pet 默认 0.8），vy≈10.4 → 落回窗顶高度需 **683ms**，
+  而禁止重绑冷却是 700ms，**只剩 17ms 余量** → 跳下去又被接回窗顶，表现为「跳了个寂寞」。
+- 修复：`releaseBound(pet, reason)`，主动跳下（`reason='jump'`）用 **1500ms** 冷却，普通掉落仍 700ms。
+
+### 修复：窄窗过滤阈值与公式量级对不上（P2）
+- 原判据「含 stand/sit 步骤 → 窗宽<260 剔除」会把 `Walk*AlongIEAndJump` 漏在池里，且 260~400px 的窗上 Sit 类锚点会出窗。
+- 改为**数据化 `minW`**（由 anchorX 公式最大偏移反推：Along=128 / Jump 类=64 / Sit 类=400）。
+
+### 新增：自动化测试与验证方案
+- `scripts/test-window-top.mjs`：40 项断言（候选池 / 全流程 / 中断 / 抛物线物理 / 接线静态检查 / 范围断言）。
+  单独 tsc 编译 + require 钩子 stub Pet + 接管 `performance.now()`，不拉 PIXI/Electron，1 秒跑完。
+- `验证方案-窗顶行为.md`：范围声明（**不做 IE 底边**、不做侧壁）+ 8 项人工验证表 + 失败排查表 + 回归命令顺序。
+
+### 说明：不做窗底
+- 用户明确不要 IE 底边悬挂（`ClimbIEBottom` / `GrabIEBottom`），全项目 0 实现，测试里有断言守着。
+  ⚠️ 代码里的 `behavior:'ceiling'`（屏幕顶贴顶飞行）名字相近但**与窗口无关**，勿混淆。
+
+## [6.1.0] - 2026-10-03
+
+> 本版重点：**图标三分位落地** + **配对「点A播B」根因修复** + 菜单瘦身 + 空闲节奏调缓。默认不再擅自抛掷用户窗口。自检：tsc 0 错；verify-actions 140 动作 0 失败；check-pair-durations 11 配对 Δ=0；verify-build 结构性检查全过。
+
+### 修复：配对菜单「点A播B」随机混乱（P0）
+- 现象：点莫娜「哄妮娜睡觉」却播做饭，且其他角色同样中招。
+- 根因：菜单 `pairTrigger` 动作若**没写 `pairId`**，会走 `startPairedMeet` 的 `(pairId && find) || pickPair(list)` 兜底 → `pickPair` 在该搭档 `meetRules` 的**所有 pairs** 里随机抽（做饭 `cookX/eatFromMona` 与睡觉 coop 混在同一个 `pairs` 数组）。于是未写 `pairId` 的食物类菜单项 50/50 随机播「做饭」或「睡觉」。
+- 修复（数据 + 代码双保险）：
+  - 给食物配对加显式 `id`：mona↔nina 加 `cook_nina`、rebeza↔mona 加 `cook_rebeza`、gwen↔mona 的 `cookIce` 加 `cook_gwen`。
+  - 给所有未写 `pairId` 的菜单动作补 `pairId` 指向对应食物对（mona/nina/rebeza/gwen 各自的 `pair_*`）。
+  - `app.ts` `startPairedMeet`：给了 `pairId` 却 `list.find` 不到时，**不再随机回退**，改为 `log('warn')` + return false（fail-loud，避免未来再出「点A播B」）。仅「没给 pairId」才允许随机（保留「惊喜一下」语义）。
+- 校验：模拟 22 个 `pairTrigger` 动作解析，随机回退数 = 0，每个食物项恒定点对点、每个合体项恒指向自身 coop。
+
+### 变更：图标改为「三分位」，各位置各用各的图（P1）
+- 此前 `loadAppIcon()` 一处读 `resources/icon.png` 同时喂给**窗口**和**托盘**，导致「换一处、两处都变」。现拆成三个独立载体：
+  | 位置 | 资产 | 生效方式 |
+  |---|---|---|
+  | 窗口 / 任务栏 / Alt-Tab | `build/icon.png`（跑鸟） | `resources/icon.png` → `loadWindowIcon()` |
+  | 系统托盘（右下小图标） | `build/tray-icon.png`（Rose 32×32） | `resources/tray-icon.png` → `loadTrayIcon()` |
+  | exe 文件图标（资源管理器） | `build/file-icon.ico`（Rose 九档 16~256） | rcedit 内嵌进 `DeskPet.exe` |
+- `makeTrayIcon()` 不再无条件缩到 16px——源图已是 32×32（16 源 NEAREST×2），任意 DPI 下均为整数倍，比 16px 放大清晰。
+- 资产去歧义命名：跑鸟三件套归档 `build/spare/bird-*`（留档不启用）；Rose 源为 Shimeji 原始素材 `ローズ/img/icon.ico`。
+
+### 调整：默认不抛掷用户窗口（P1）
+- `config/config.json` 的 `window.throwEnabled: true → false`（与 `config.ts` 的代码默认值一致，原注释即写着「避免擅自搬动用户的窗口」）。
+- **不是一次性开关**：设置面板的勾选框仍可用，勾上会把 `throwEnabled/throwRollMs/throwChance` 一并写回配置文件。`throwRollMs`(60s) / `throwChance`(0.01) 未改动。
+
+### 调整：空闲节奏调缓，宠物站得更久（P2）
+- 根因澄清：`wanderActions[].weight` 只决定**动作之间**的概率，**不控制「站立 vs 动作」**。站立 = 停在 `defaultAction` 且未触发下一次漫游，频率由 `wanderTauMs`（指数触发 τ，默认 1667）+ `wanderMinDelayMs`（默认 1500）决定。
+- 改动（5 个 `config/characters/*.json`，纯数据）：顶层加 `"wanderTauMs": 5000` + `"wanderMinDelayMs": 4000`；非 walk 的 `weight: 2 → 1`。
+- 效果：触发率约为原来的 1/3（均值等待 ~5s vs ~1.6s），且动作之间强制站立 4s。walk 占比 rose64%/nina61%/rebeza65%/mona57%/gwen65%。
+
+### 调整：右键菜单瘦身（P2）
+- **隐藏全部「互动」/「合体」手动菜单项**：5 个 `config/actions/*.json` 中 `menuGroup ∈ {互动, 合体}` 的 24 个动作统一 `menu:false`。
+- **软删除莫娜「单独的做饭」**：`cookBread/cookMeat/cookIce/cookMilk/Wine` 五项 `menu:false` + `wanderActions weight:0`。**不能硬删定义**——其中 4 项分别是 rose/gwen/nina/rebeza 配对 `eat`/`cook_*` 的 `self` 动作，删定义会让合体断（lead 取 undefined）。
+- **隐藏莫娜「鱿鱼 / 章鱼」**（`fishSquid`/`fishOctopus`）：`menu:false`，但 `wanderActions` 权重**保持 1** —— 菜单里看不到，漫步时自己仍会去钓。钓鱼组剩温泉魔鱼/巨骨魔鱼/海草。
+- ⚠️ 以上均只影响**手动右键菜单**；`rollMeet` 的自动相遇互动/合体、以及 coop 显式 action id 触发**不受 menu 影响**。
+
+### 合并：桌宠测试版调参回灌（P3）
+- 新增 `scripts/merge-test-cfg.mjs`（dry-run 默认，`--write` 落盘），白名单只同步纯调参字段（`frameMs/durationMs/loopCount/offset/moveSpeed/flyCeiling/climb/menuOrder`），**绝不覆盖** `pairId/label/menu/menuGroup/pairTrigger/pairWith/frames/rightFrames/dialogue/coop/behavior`。
+- ⚠️ 关键发现：测试版是较旧快照（全 `pairId=null`、旧 25 帧错位版、旧 label），无脑整体覆盖会把已修 bug 引回来。
+- 本次实际同步 5 处手感更新：mona.stand frameMs 800→6000、gwen.stand 800→4800、mona.walk durationMs 10000→12000、gwen.walk 10000→25000、mona.climb menuOrder 10→null。
+
+### 工程：发版与校验脚本增强（P3）
+- `repack-portable.mjs`：支持 `node scripts/repack-portable.mjs <目标目录名>`（不再只能按版本号生成目录名）。
+- `verify-build.mjs`：新增 `resources/tray-icon.png`、`resources/icon.png` 存在且非空两项检查；原「`DeskPet.exe --version` 可执行」项长期 FAIL 的根因是**本 app 从未实现 `--version` CLI 参数**（直接跑会拉起 GUI、无输出），改用 `ELECTRON_RUN_AS_NODE=1` 纯 Node 模式冒烟（能验证二进制完好且不开 GUI）；沙箱禁止 spawn 新二进制时自动降级为 SKIP，并补了不依赖启动进程的 PE 头 + 体积校验。
+- `electron-builder` 的 winCodeSign 缓存已填充（`rcedit-x64.exe`），`embedExeIcon()` 改为优先直接调 rcedit、找不到才回退 app-builder，**以后 repack 可离线完成 exe 图标内嵌**。
+
+### 已知限制
+- **动作预览面板（可视化编辑器）列入下一版（6.2.0）待做**：只读预览（选角色 → 选动作 → 播放 + 帧缩略图网格 + 时序数据条）先行，编辑能力（增删帧/调 frameMs/新增动作）后续。本版未包含。
+
 ## [6.0.0] - 2026-10-02
 
 > 本版重点：**交互稳定性大修** —— 修掉窗口投掷卡死、合体互斥偶发卡死、合体触发闪烁；合体菜单统一改名「互动」；妮娜吃奶冻补帧节奏可配。自检：renderer+main tsc 0 错；verify-actions 全通过；check-pair-durations 11 配对 0 异常 Δ=0；verify-menu-groups 断言通过。

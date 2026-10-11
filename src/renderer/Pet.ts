@@ -95,8 +95,27 @@ export class Pet {
   /** 是否已进入退场流程（含「先掉落回地面」这段等待期）。外部调度/命中判定统一用这个。 */
   public isLeaving(): boolean { return this.isRemoving || this.removePending; }
 
-  /** 窗口交互占用（搬运窗口/挂窗沿）：位置由 WindowInteract 接管，行为/物理暂停。 */
+  /** 窗口交互占用（搬运窗口/投掷演出）：位置由 WindowInteract 接管，行为/物理暂停。 */
   public isWindowHeld = false;
+
+  /** 站在**窗口顶边**上（由 WindowInteract 置位）。
+   *  ⚠️ 与 `isWindowHeld` 是两回事：
+   *    - `isWindowHeld` = 被窗口**演出**接管（carry/throwShow），`update()` 整体停摆、只播帧；
+   *    - `onWindowTop`  = 只是把**地面换成了窗顶**（`groundOverrideY`），行为/物理照常跑——
+   *      能左右走、能待机、能做随机动作、踩空会自己掉，跟在地面上完全一致
+   *      （对齐旧版 Shimeji：窗顶 = 一条 Border，与地面是同一类东西）。 */
+  public onWindowTop = false;
+
+  /** 是否被窗口相关逻辑占用（演出接管 **或** 站在窗顶），供 app.ts 的调度过滤 / 释放用。
+   *  单看 `isWindowHeld` 会漏掉站窗顶的角色（它们不再置 isWindowHeld，否则 update 早退、啥也做不了）。 */
+  public isWindowBusy(): boolean { return this.isWindowHeld || this.onWindowTop; }
+
+  /** 「地面基线覆盖」：非空时，本角色的地面（`baselineY()` / `groundY()`）改用这个值，而非屏幕底边。
+   *  站窗顶时由 WindowInteract 设为「窗顶 - 身高」（脚底贴窗顶时的容器 y），此后：
+   *    - 行走 / 待机 / 随机动作 → 全部走 Pet 自己的逻辑，与在地面上一模一样；
+   *    - 窗顶下移 → 基线跟着下移，角色变成「离地」→ `stepPhysics` 自动踩空自由落体去追（不需要吸力）；
+   *    - 置回 null → 地面恢复屏幕底边，角色从窗顶高度自然掉回地面。 */
+  public groundOverrideY: number | null = null;
 
   /** 按屏幕坐标命中宠物（右键/悬停兜底，避免穿透态下 Pixi pointerover 漏触发导致死锁）。
    *
@@ -252,6 +271,9 @@ export class Pet {
   // walkArriveCb：「走到屏幕某一列」（walkToX）途中，到达目标点后触发的回调。
   // 窗口投掷编排的 approach 阶段靠它把控制权交回状态机（走到 → 抓住）。到点前 Pet.update 仍走 stepWalk。
   private walkArriveCb: (() => void) | null = null;
+  /** 本次「走到某列」的速度倍率（1=正常走）。仅供外部编排（窗口投掷 approach / 窗顶 Run 变体）
+   *  在 walkToX 时临时提/降速；切动作即复位，绝不会泄漏到普通漫游里。 */
+  private walkSpeedScale = 1;
   private ceilingHangUntil = 0; // 贴顶飞到顶后的悬挂截止时刻(ms)；0=未悬挂，-1=已悬挂完
   // —— 贴顶飞（flyMode='ceiling'）会话：贴到上缘 → 左右巡逻 → 到期掉落 ——
   private ceilingSessionActive = false; // 是否已贴上缘（计时起点标志）
@@ -424,6 +446,9 @@ export class Pet {
     });
     this.actionId = id;
     this.actionDef = def;
+    // 外部编排（walkToX 的 Run/Dash 倍率）只在「那一次行走」内有效：换动作即复位。
+    // ⚠️ 放在赋值 actionId 之后、walkToX 再写入新值之前，顺序不能反，否则每次都被清掉。
+    this.walkSpeedScale = 1;
     // 飞行「移动/悬停」相位状态：切动作即复位。新动作若配了 hoverFrames，
     // 由随后的 resetFlySession 重新掷第一段移动时长，不会残留上一个动作的悬停态。
     this.flyHovering = false;
@@ -1266,7 +1291,9 @@ export class Pet {
       if (this.idleMs < minDelay) return;
       // 贴屏幕边缘时优先选攀爬而非 walk：避免从 idle 进入 walk 后立刻撞墙、原地踏步抖动
       // 冷却期（刚从墙上下来）例外 —— 否则刚落地又立刻被判贴边 → 马上重爬，表现为「粘在墙上不下来」
-      if (this.atScreenEdge(10) && !this.isClimbBlocked()) {
+      // 站在窗顶时例外 —— 窗顶也是屏幕边缘附近的常见位置，此时去爬「屏幕边框」等于从窗口掉下去，
+      // 与窗顶专属行为（在窗顶走/坐/从窗边跳下）抢人。窗顶上的活由 WindowInteract 的窗顶编排负责。
+      if (this.atScreenEdge(10) && !this.isClimbBlocked() && !this.onWindowTop) {
         this.requestAction(this.config.climbAction || 'climb');
         return;
       }
@@ -1293,6 +1320,7 @@ export class Pet {
       const def = this.config.actions[e.id];
       if (!def || e.weight <= 0) continue;
       if (atEdge && def.behavior === 'walk') continue; // 贴边不选 walk（撞墙鬼畜）
+      if (this.onWindowTop && (def.behavior === 'climb' || def.behavior === 'ceiling')) continue; // 窗顶上不去爬屏幕边/贴顶
       pool.push(e);
     }
     if (pool.length === 0) return null;
@@ -1357,7 +1385,7 @@ export class Pet {
     const w = this.config.size.width;
     const hitLeftWall = this.container.x <= 0 && dx < 0;
     const hitRightWall = this.container.x >= window.innerWidth - w && dx > 0;
-    if ((hitLeftWall || hitRightWall) && !this.walkArriveCb) {
+    if ((hitLeftWall || hitRightWall) && !this.walkArriveCb && !this.onWindowTop) {
       // —— 监管埋点：walk 撞墙（攀爬误触发 / 原地踏步溯源点）——
       slog({
         level: 'action',
@@ -1399,8 +1427,8 @@ export class Pet {
     // 位移速度取「当前行走帧的 vx」（数据驱动，参考 Shimeji 每帧 Pose 带 Velocity）：
     // 该帧未写 vx → 回退动作级 moveSpeed；vx=0 的支撑帧该帧不位移 → 踩步感。
     // 连续逐帧应用（非「换帧跳一格」），整体速度与原连续滑动一致、但脚步与位移绑定在帧上。
-    const speed = frameVx(this.actionDef.frames, this.frameIdx)
-      ?? (this.actionDef.moveSpeed ?? this.config.moveSpeed ?? 1.2);
+    const speed = (frameVx(this.actionDef.frames, this.frameIdx)
+      ?? (this.actionDef.moveSpeed ?? this.config.moveSpeed ?? 1.2)) * this.walkSpeedScale;
     this.container.x += Math.sign(dx) * speed * (dtMs / 1000) * 60;
     this.container.y = this.baselineY();
     this.clampBounds();
@@ -2014,17 +2042,46 @@ export class Pet {
    *   - 行走期间 isWalkingToTarget === true → app.ts 的边缘攀爬调度器跳过，不会走到一半被抢去贴墙爬；
    *   - 撞屏幕边界时 stepWalk 不转攀爬（walkArriveCb 非空），撞墙即视为到达。
    *  x = 容器**左边缘**目标坐标（调用方自行减 宽/2），此处只夹进屏幕，不再二次偏移。
+   *  @param speedScale 位移速度倍率（1=正常走）。跑/(复用同一套走帧跑起来)传 2 —— 旧版 Walk Velocity=2、
+   *                    Run Velocity=4，正好 2 倍，故这里不是「加新动作」而是「同一套帧加速」。
    *  无定时器：靠 walk 到达收尾；中途被其它动作/拖拽打断时，walkArriveCb 在
    *  requestAction / startAction / beginDrag 被清空（到达回调作废）。 */
-  public walkToX(x: number, resolver: SpriteResolver, onArrive: () => void) {
+  public walkToX(x: number, resolver: SpriteResolver, onArrive: () => void, speedScale = 1) {
     if (this.isDragging || this.isLeaving()) return;
     this.meetPhase = 'none';
     this.walkArriveCb = onArrive;
     this.setAction(this.config.walkAction || 'walk', resolver);
+    this.walkSpeedScale = speedScale > 0 ? speedScale : 1; // ⚠️ 必须在 setAction 之后（setAction 会复位为 1）
     const w = this.config.size.width;
     const tx = Math.max(0, Math.min(window.innerWidth - w, x));
     this.targetPos = { x: tx, y: this.baselineY() };
     this.scheduleActionEnd(resolver, 0); // 0 = 不挂定时器，仅由到达驱动
+  }
+
+  /** 把**当前正在进行的自主漫游**（wander，即没有到达回调的那种 walk）的目标点夹进指定横向区间。
+   *  站窗顶时由 WindowInteract 每帧调用：让她在窗顶上的随机走动始终落在窗口跨度内，
+   *  不会「走两步就掉下去」；而带到达回调的编排（窗顶走到窗边再跳下）不受影响。
+   *  ⚠️ 只改目标点、不瞬移角色：她若已在区间外，会自然走回来而不是被拽回去。 */
+  public clampWalkTarget(minX: number, maxX: number) {
+    if (this.actionDef?.behavior !== 'walk') return;
+    if (this.walkArriveCb) return; // 编排中的行走由编排自己负责目标点
+    const w = this.config.size.width;
+    const lo = Math.max(0, Math.min(minX, window.innerWidth - w));
+    const hi = Math.max(lo, Math.min(maxX, window.innerWidth - w));
+    if (this.targetPos.x < lo) this.targetPos.x = lo;
+    else if (this.targetPos.x > hi) this.targetPos.x = hi;
+  }
+
+  /** 给一个抛体初速度（px/帧@60fps，vx 正=向右 / vy 正=向下）：窗顶/墙上一跃而下。
+   *  之后完全由 stepPhysics 接管（自动切 fallback 帧、落地弹跳→回待机），调用方无需再管收尾。
+   *  ⚠️ 调用方必须**先把地面还原**（WindowInteract.releaseBound 之类），否则她会立刻落在原来的
+   *     窗顶高度上，看起来像「没跳只是弯了个腿」。 */
+  public launch(vx: number, vy: number) {
+    this.menuHold = false; // 可能带着菜单冻结残留，否则跳下去后一直不动
+    this.vx = vx;
+    this.vy = vy;
+    this.spawnFalling = false;
+    this.spawnSettling = false;
   }
 
   // 保存 resolver 引用供 requestAction 使用
@@ -2252,6 +2309,16 @@ export class Pet {
       // 松手回到默认动作（飞行/下落过程播放默认帧，由 physics 接管位置）
       this.setAction(this.config.defaultAction || 'idle', this.lastResolver);
       this.applyFacing(); // 抛出/松手后按当前 facingRight 即时翻转（setAction 内部不调 applyFacing）
+      // 落点广播（cx=水平中心 / fy=脚底 / cy=垂直中心，容器坐标≈屏幕坐标）：
+      // app.ts 收到后若落点压在某个可互动窗口上 → 就地站在窗口顶边（gentle drop，立即吸附）；
+      // 若是甩出去的（带初速度），此处不清速度，交给 WindowInteract 在下落途中按「窗顶穿越检测」接住。
+      const dw = this.config.size.width, dh = this.config.size.height;
+      eventBus.emit(EVENTS.PET_DROP, {
+        pet: this,
+        cx: this.container.x + dw / 2,
+        fy: this.container.y + dh,
+        cy: this.container.y + dh / 2,
+      });
     };
     this.container.on('globalpointermove', onMove);
     this.container.on('pointerup', onUp);
@@ -2277,6 +2344,8 @@ export class Pet {
   public groundY(): number { return this.baselineY(); }
 
   private baselineY(): number {
+    // 站窗顶时地面 = 窗口顶边（由 WindowInteract 写入 groundOverrideY），其余全走屏幕底边
+    if (this.groundOverrideY !== null) return this.groundOverrideY;
     return Pet.getFloor() - this.config.size.height - (this.config.bottomMargin || 0);
   }
 
@@ -2363,6 +2432,25 @@ export class Pet {
     const beh = this.actionDef?.behavior;
     if (beh === 'climb' || beh === 'ceiling' || beh === 'fly' || beh === 'drag') return true;
     return this.container.y < this.baselineY() - 0.5;
+  }
+
+  /** 当前动作的行为类型（climb/ceiling/fly/drag/walk/static…），只读，供外部（windowInteract 接住判定）访问。 */
+  public currentBehavior(): string | undefined {
+    return this.actionDef?.behavior;
+  }
+
+  /** 清掉抛投/位移初速度（不改位置、不触发 menuHold 冻结）。
+   *  供 windowInteract 半空接住前清速度：被窗顶接住的瞬间把抛物线刹停，直接站上窗顶。 */
+  public clearVelocity() {
+    this.vx = 0;
+    this.vy = 0;
+  }
+
+  /** 竖直速度（px/帧，正 = 向下）。只读，供 windowInteract 判「是否正在下落」——
+   *  半空接窗顶只接下落中的角色：站在窗顶（vy=0）/ 上升中的角色不接，
+   *  否则「刚被接住 → 被抢走 → 又接住」会每帧反复触发。 */
+  public velocityY(): number {
+    return this.vy;
   }
 
   /** 菜单关闭但没选动作 → 解除冻结，行为/物理自然接管（攀爬从原位置继续爬）。 */

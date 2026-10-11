@@ -24,10 +24,15 @@
       "Chat",
       "Friends",
       "conf",
-      "Data"
+      "Data",
+      "C:\\WINDOWS\\system32\\cmd.exe"
     ],
-    "throwEnabled": true,
+    "throwEnabled": false,
     "throwRollMs": 60000,
-    "throwChance": 0.01
+    "throwChance": 0.01,
+  "ledgeEnabled": false,
+  "ledgeRollMs": 45000,
+  "ledgeChance": 0.08,
+  "topBehaviorEnabled": true
   }
 }

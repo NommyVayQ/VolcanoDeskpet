@@ -97,4 +97,29 @@ export class SpriteResolver {
     }
     return out;
   }
+
+  /**
+   * 取一帧的 PNG dataURL（不过 Pixi）。供动作预览面板的 <img> 直接显示用。
+   *
+   * 为什么单独开这个方法、而不是从 PIXI.Texture 里把像素抠出来再转 dataURL：
+   * 那条路要依赖 Pixi v8 的内部结构（source.resource 到底存的是 Uint8Array / HTMLImageElement
+   * 还是 ImageBitmap，随 loader 与版本变化），一改版本就静默变成空白图。
+   * 这里直接 fs.readFileSync + base64，与 loadTexture 用的是**同一套路径解析和 manifest 查表**，
+   * 因此「预览看到的图」与「桌宠实际加载的图」必然是同一张，也最省内存（不建 GPU 纹理）。
+   *
+   * 返回 null 表示：manifest 无此帧名 / 文件不存在 / 读取失败。
+   */
+  frameDataUrl(charId: string, frameName: string): string | null {
+    const rel = this.manifest?.frames?.[charId]?.[frameName]
+      ?? this.manifest?.frames?.['coop']?.[frameName];
+    if (!rel) return null;
+    const abs = path.join(this.assetDir, rel);
+    try {
+      if (!fs.existsSync(abs)) return null;
+      return 'data:image/png;base64,' + fs.readFileSync(abs).toString('base64');
+    } catch (e) {
+      console.warn('[SpriteResolver] frameDataUrl failed:', abs, e);
+      return null;
+    }
+  }
 }

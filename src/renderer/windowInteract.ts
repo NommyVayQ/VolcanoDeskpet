@@ -1,7 +1,8 @@
 /**
  * 窗口交互（渲染层）：
  * - carry：窗口吸附在宠物头顶跟随移动；拖拽宠物即拖动窗口，松手按指针速度把窗口抛出（主进程模拟重力）。
- * - ledge：宠物站在最近窗口的顶边，随窗口移动；窗口消失/超时则物理掉落。
+ * - ledge（站窗顶）：窗口顶边 = 一条「可落地面」（Border）。宠物站上去后**每帧随窗口滑动**（骑窗），
+ *   窗口被关/最小化/拖走才掉落——**没有超时、没有走跳演出**，与原版 Shimeji 一致。
  * - throwShow：「搬走并甩出窗口」整段演出 —— **逐段复刻原桌宠 Shimeji 的 ThrowIEFromLeft / ThrowIEFromRight**：
  *
  *   原版 conf/actions.xml（TICK_INTERVAL = 40ms，Pose 的 Velocity 单位 = px/tick）：
@@ -30,6 +31,7 @@
  */
 import { Pet } from './Pet';
 import { SpriteResolver } from './SpriteResolver';
+import { CeilingBehavior } from './windowCeiling';
 
 const req: any = (window as any).require;
 const { ipcRenderer } = req('electron');
@@ -60,6 +62,22 @@ const T_GRAB_MS = 260;   // 抓住后停一帧（原版 Jumpingx → FallWithIe 
 const T_FALL_MS = 8000;
 const T_CARRY_MS = 40000;
 const T_THROW_MS = 1200; // 甩出姿势保持（原版 ThrowIe 动画 40 tick × 40ms = 1.6s，这里取 1.2s）
+
+// —— 站窗顶的「跟随守卫」阈值：逐字对齐旧版 `FloorCeiling.move(Point)` 字节码 ——
+// 旧版每 tick = 40ms 调一次 `anchor = border.move(anchor)`，move() 里有三个放弃跟随的守卫：
+//   |dx| >= 80       → 不跟随（窗口横向跳得太远）
+//   dy >  20        → 不跟随（窗口**下移**太快 → 角色被留在原地 = 踩空）
+//   dy < -80        → 不跟随（窗口上移太快 → 角色被留在下方）
+// 不跟随 = 角色停在原处、与窗口错位 → 下一帧 `isOn()` 不成立 → 抛 LostGroundException → 改播下落。
+// 本程序等价实现：不搬运位移 → 角色相对窗顶悬空/错位 → Pet 的 stepPhysics 接管（重力下落 / 被地面顶上来）。
+/** 旧版一个 tick 的时长（ms）。所有阈值都以「每 40ms」为基准，按实际经过时间等比缩放。 */
+const SHIMEJI_TICK_MS = 40;
+/** 横向跟随上限：窗口单次位移超过 80px/tick 就不搬运（角色被落下）。 */
+const FOLLOW_MAX_DX = 80;
+/** 向下跟随上限：窗口顶边下移超过 20px/tick 就不搬运 → 角色踩空自由落体（**关键**：这就是「拖窗口向下她会掉」的来源）。 */
+const FOLLOW_MAX_DOWN = 20;
+/** 向上跟随上限：窗口顶边上移超过 80px/tick 就不搬运。 */
+const FOLLOW_MAX_UP = 80;
 
 function log(level: string, msg: string) {
   console.log('[wininteract:' + level + '] ' + msg);
@@ -102,6 +120,12 @@ interface ThrowShow {
   lastTick: number;
 }
 
+/** 「站窗顶」= 把窗口顶边当成一条**可落地面**（复刻旧版 Shimeji 的 `Border` / `activeIE.topBorder`）：
+ *  宠物被「绑定」到窗口顶边后，每帧据窗口实时矩形把脚底吸附到顶边（骑窗），窗口移动它就跟着动；
+ *  **没有**「走过去跳上去」的演出、**没有**定时掉落、**没有**异步轮询——窗口被关/最小化/拖走才掉。
+ *  绑定状态按宠物各自持有一份（this.bound: Map），多宠可同时各站各的窗口，互不干扰（也不再抢槽刷屏）。 */
+
+
 export class WindowInteract {
   private resolver: SpriteResolver;
   private carry: {
@@ -109,16 +133,43 @@ export class WindowInteract {
     lastSync: number; startedAt: number; wasDragging: boolean;
     lastPetX: number; lastPetY: number; velX: number; velY: number;
   } | null = null;
-  private ledge: {
-    pet: Pet; hwnd: number; relX: number;
-    nextPoll: number; deadline: number; lastRect: { x: number; y: number; w: number; h: number } | null;
-  } | null = null;
+  /** 已绑定窗口顶的宠物：每只各绑各的窗口。
+   *  hwnd = 窗口句柄；prevWinX/Y = 上次采到的窗口左上坐标；prevAt = 那次采样的时间戳。
+   *  ⚠️ 不再存 vy / slip：踩空下落交给 Pet 自己的 stepPhysics（地面就是窗顶，见 groundOverrideY）。 */
+  private bound = new Map<Pet, { hwnd: number; prevWinX: number; prevWinY: number; prevAt: number }>();
   private show: ThrowShow | null = null;
   private available: boolean | null = null;
+  /** 窗口列表缓存：ticker 每帧要检测「飞行中是否被窗顶接住」，不能每帧 IPC，故 100ms 刷新一次。 */
+  private winCache: WinInfo[] = [];
+  private winCacheAt = 0;
+  /** 上一帧脚底 y：用于判「本帧是否从上方穿过窗口顶边」（穿越检测，比固定容差带更稳、高速抛投也漏不掉）。 */
+  private lastFeetY = new Map<Pet, number>();
+  /** 窗顶专属行为编排器（站上窗顶后自发的一整套行为，见 windowCeiling.ts 的 conf 出处注释）。 */
+  private ceiling: CeilingBehavior;
+  /** 窗顶专属行为总开关（config.json window.topBehaviorEnabled，默认 true）。
+   *  关掉后站上窗顶只剩「和地面一样的行走/待机」，不再自发那一套。 */
+  private topBehaviorEnabled = true;
+  /** 「刚掉下窗顶」的冷却：掉落后短时间内不再被（可能还没刷新的）窗口缓存接回同一处，避免抖动。
+   *  取 700ms：踩空掉落途中要够长，否则「窗口正在下移 → 角色掉一半又被追上」会变成黏住不放。 */
+  private bindBlockUntil = new Map<Pet, number>();
 
   constructor(resolver: SpriteResolver) {
     this.resolver = resolver;
+    // 窗顶专属行为编排（"On Top of IE" 条件组）：注入「释放绑定」与日志，其余规模自持
+    this.ceiling = new CeilingBehavior({
+      resolver,
+      release: (pet) => this.releaseBound(pet),
+      log,
+    });
   }
+
+  /** 开关「窗顶专属行为组」（"On Top of IE" 条件组）。关掉立刻作废在手编排。 */
+  setTopBehaviorEnabled(on: boolean) {
+    this.topBehaviorEnabled = on;
+    if (!on) for (const pet of [...this.ceilingPlanned()]) this.ceiling.cancel(pet);
+  }
+
+  private ceilingPlanned(): Pet[] { return [...this.bound.keys()]; }
 
   /** koffi 是否可用（不可用时窗口系菜单隐藏）。缓存一次。 */
   async isAvailable(): Promise<boolean> {
@@ -160,7 +211,8 @@ export class WindowInteract {
   /** 搬运窗口：窗口吸附宠物头顶。 */
   async startCarry(pet: Pet): Promise<boolean> {
     if (!(await this.isAvailable())) return false;
-    this.stop();
+    this.releaseFor(pet); // 只放掉这只自己的占用（别的宠物仍可站在自己那扇窗顶）
+    if (this.carry) { this.carry.pet.isWindowHeld = false; this.carry = null; } // carry 是单例，接管前先放掉别人的
     const win = await this.topmostWindow(pet);
     if (!win) { log('warn', 'no window to carry'); return false; }
     pet.standStill(this.resolver);
@@ -178,27 +230,81 @@ export class WindowInteract {
     return true;
   }
 
-  /** 挂窗沿：宠物站到最顶层(最靠前)的可互动窗口的顶边。 */
-  async startLedge(pet: Pet): Promise<boolean> {
-    if (!(await this.isAvailable())) return false;
-    this.stop();
-    const win = await this.topmostWindow(pet);
-    if (!win) { log('warn', 'no window to stand on'); return false; }
-    pet.standStill(this.resolver);
-    pet.isWindowHeld = true;
-    // 站在窗口顶边，横向取窗口中心附近
-    const relX = Math.max(0, Math.min(win.w - pet.config.size.width, win.w / 2 - pet.config.size.width / 2));
-    pet.container.x = win.x + relX;
-    pet.container.y = win.y - pet.config.size.height;
-    this.ledge = {
-      pet, hwnd: win.hwnd, relX,
-      nextPoll: 0,
-      deadline: performance.now() + 6000 + Math.random() * 9000,
-      lastRect: { x: win.x, y: win.y, w: win.w, h: win.h },
+  /** 找落点正下方/正上方、且 x 跨度覆盖落点的可互动窗口（带容差 tol）。
+   *  用于「拖放角色到窗口上 → 自动站窗沿」：落点 (cx, feetY) 命中窗口矩形（含中心 cy）即算命中。
+   *  返回最靠前（z 最小）的命中窗口，无则 null。winapi 不可用返回 null。 */
+  async findWindowAt(cx: number, feetY: number, centerY: number, tol = 60): Promise<WinInfo | null> {
+    if (!(await this.isAvailable())) return null;
+    const wins: WinInfo[] = await ipcRenderer.invoke('win-list');
+    if (!wins || wins.length === 0) return null;
+    const inside = (w: WinInfo) => {
+      if (w.occluded) return false;
+      const xOk = cx >= w.x - tol && cx <= w.x + w.w + tol;
+      if (!xOk) return false;
+      const yOk = (feetY >= w.y - tol && feetY <= w.y + w.h + tol)
+        || (centerY >= w.y - tol && centerY <= w.y + w.h + tol);
+      return yOk;
     };
-    log('info', 'standing on window ' + win.hwnd + ' (' + win.title.slice(0, 20) + ')');
+    const hits = wins.filter(inside);
+    if (hits.length === 0) return null;
+    let best: WinInfo | null = null;
+    let bestZ = Infinity;
+    for (const w of hits) {
+      const z = w.z ?? 0;
+      if (z < bestZ) { bestZ = z; best = w; }
+    }
+    return best;
+  }
+
+  /** 站窗顶（复刻旧版 Shimeji `activeIE.topBorder` 绑定）：
+   *  把宠物**直接放到窗口顶边**（脚底对齐窗口顶边）并**永久绑定**——之后每帧随窗口滑动（骑窗），
+   *  窗口被关/最小化/拖走才掉下来。
+   *  ⚠️ 旧版是「Move 到那条 Border 上」而不是先走到窗口下方再跳上去，故本版**没有**走/跳演出：
+   *     自动站窗（nina 掷骰）、拖放落到窗顶、抛投过程中被窗顶接住，三条入口都收敛到这里。
+   *  ⚠️ **横向零位移**（2026-10-10 用户要求「不要吸附」）：站上去只做「脚底对齐窗口顶边」这一下，
+   *     水平位置**原样保留**——不夹进窗口范围、不往窗口中心靠。若角色被放到窗口边缘，就站在边缘
+   *     （一半悬在外面也行），窗口之后左右移动时她才跟着走（保持相对偏移）。
+   *  @param win 指定要站上去的窗口；省略则取 Z 序最靠前且未被遮挡的可互动窗口。 */
+  async bindToWindow(pet: Pet, win?: WinInfo): Promise<boolean> {
+    if (!(await this.isAvailable())) return false;
+    if (pet.isDraggingAction() || pet.isLeaving()) return false;
+    const w = win ?? await this.topmostWindow(pet);
+    if (!w) { log('warn', 'no window to stand on'); return false; }
+    this.bindNow(pet, w);
     return true;
   }
+
+  /** 把宠物绑定到窗口顶边：**只换地面，不冻结角色**。
+   *
+   *  ⚠️ 关键设计（2026-10-11）：早期版本置 `isWindowHeld=true` 让 `Pet.update()` 早退、位置由本类每帧重夹——
+   *     结果是站上去只能**呆立**（不能走、不能做动作），且竖直方向变成"磁铁"（窗口下移人被 lerp 拽着走）。
+   *     正确做法是**把窗顶变成 Pet 的地面**：设 `pet.groundOverrideY = w.y - petH`，此后
+   *     行走/待机/随机动作/踩空下落全部由 Pet 自己的逻辑处理（它本就用 `baselineY()` 当地面），
+   *     与站在地面上完全一致——这正是旧版 Shimeji「窗顶 = 一条 Border，和地面同类」的等价实现。
+   *
+   *  ⚠️ **横向零位移**（用户要求「不要吸附」）：只改 y（脚底对齐窗顶），x 一律不动、不做 clamp；
+   *     窗口左右移动时按**位移增量**叠加到角色身上（保持相对位置，不与她自己走路抢 x）。 */
+  private bindNow(pet: Pet, w: WinInfo) {
+    this.releaseFor(pet); // ⚠️ 只释放**这只宠物自己**的窗口占用，绝不动别人的窗顶/搬运（多宠各站各的）
+    const petH = pet.config.size.height;
+    // 直接清速度（不走 standStill：后者对「非地面」角色会置 menuHold，掉落后残留冻结态）
+    pet.clearVelocity();
+    pet.groundOverrideY = w.y - petH; // 地面 = 窗口顶边（脚底贴顶边时的容器 y）
+    pet.onWindowTop = true;
+    pet.container.y = w.y - petH; // 脚底 = 窗口顶边（x 不动）
+    pet.setFacingDir(pet.container.x < w.x + w.w / 2);
+    pet.setAction(pet.config.defaultAction || 'idle', this.resolver);
+    this.bound.set(pet, { hwnd: w.hwnd, prevWinX: w.x, prevWinY: w.y, prevAt: performance.now() });
+    this.lastFeetY.delete(pet);
+    this.ceiling.bind(pet); // 站上窗顶 → 开始自发窗顶行为（走/跑/爬/坐窗边/从窗边跳下）
+    log('info', '[winledge] 站上窗口「' + w.title.slice(0, 20) + '」顶边（顶边 y=' + Math.round(w.y)
+      + '），地面换成窗顶：可自由行走/做动作，直至走出窗口或窗口消失');
+  }
+
+  /** 「飞行途中被窗顶接住」的判定在 `update()` 里每帧同步执行（见「空中宠物：窗顶穿越检测」段）：
+   *  下落中的宠物一旦从上方**穿过**某窗口顶边，就地 `bindNow` 站上去——
+   *  不再先落到地面再走回去（旧版也不走回去），也不会越过窗口飞出屏幕。
+   *  不再单独暴露成方法：判定要读「上一帧脚底」做穿越检测，这段状态天然属于主循环。 */
 
   /**
    * 「搬走并甩出窗口」整段演出（复刻原桌宠 ThrowIEFromLeft / ThrowIEFromRight）。
@@ -231,7 +337,8 @@ export class WindowInteract {
       log('warn', '[winthrow] 已有投掷演出进行中，本次触发跳过（等上一场结束）');
       return false;
     }
-    this.stop();
+    this.releaseFor(pet); // 只放掉这只自己的占用；不能用 stop()——那会把别的宠物从窗顶赶下来
+    if (this.carry) { this.carry.pet.isWindowHeld = false; this.carry = null; } // carry 是单例，接管前先放掉别人的
     let wins: WinInfo[] = [];
     try {
       wins = await ipcRenderer.invoke('win-list', whitelist);
@@ -309,7 +416,7 @@ export class WindowInteract {
       + '，' + (run ? '奔跑' : '步行') + '（原版 RunWithIe/WalkWithIe）'
       + '；走到 x=' + Math.round(cornerCenterX - petW / 2) + '，跳上 y=' + Math.round(jumpTopY)
       + '，终点 x=' + Math.round(targetX));
-    // 走到窗口正下方（中心对齐）再起跳：复用 walkToX（到达检测 + 「行走中不被边缘攀爬抢人」的守卫）
+    // 走到窗口正下方（中心对齐）再起跳：复用 walkToX（自带到达检测）
     pet.walkToX(cornerCenterX - petW / 2, this.resolver, () => this.enterJump());
     return true;
   }
@@ -331,10 +438,12 @@ export class WindowInteract {
     return n;
   }
 
-  /** 停止任何窗口交互模式（carry 放下 / ledge 结束 / 投掷演出中止，不触发掉落）。 */
+  /** 停止**所有**窗口交互（全部宠物的站窗 + 单例 carry/show）。
+   *  用于「窗口归还」等全局收尾。⚠️ 单只宠物换动作/退场请用 releaseFor(pet)——
+   *  在多宠场景用 stop() 会把别的宠物从窗顶一起赶下来；日常一律走 releaseFor。 */
   stop() {
+    for (const pet of [...this.bound.keys()]) this.releaseBound(pet);
     if (this.carry) this.carry.pet.isWindowHeld = false;
-    if (this.ledge) this.ledge.pet.isWindowHeld = false;
     if (this.show) {
       // ⚠️ 不能只做 `pet.isWindowHeld=false; show=null`：那会把宠物**留在 throwWindow 帧上、
       // 又不再有任何代码推进它的动作** → 永久定格（截图里格温卡在 L-throw-3 就是这原因）。
@@ -344,21 +453,150 @@ export class WindowInteract {
       const pet = this.show.pet;
       this.show = null;
       pet.isWindowHeld = false;
+      pet.resumeAfterMenu(); // 清掉可能残留的「非地面 standStill 冻结」（menuHold），否则释放后角色定住不动
       if (!pet.isDraggingAction() && !pet.isLeaving()) {
         pet.setAction(pet.config.defaultAction || 'idle', this.resolver);
       }
       log('info', '[winthrow] 投掷演出被中止，宠物已释放回默认动作');
     }
     this.carry = null;
-    this.ledge = null;
   }
 
-  /** 主循环驱动（app.ticker 每帧调用）。 */
-  update() {
+  /** 只释放**指定宠物**的窗口占用（站窗 / 搬运 / 投掷演出），不影响别的宠物。
+   *  多宠场景下换动作 / 退场 / 覆盖站窗都该走这个，而不是全局 stop()。 */
+  releaseFor(pet: Pet) {
+    if (this.bound.has(pet)) this.releaseBound(pet);
+    if (this.carry && this.carry.pet === pet) { this.carry.pet.isWindowHeld = false; this.carry = null; }
+    if (this.show && this.show.pet === pet) this.finishShow();
+  }
+
+  /** 解除一只宠物的站窗绑定：**把地面换回屏幕底边** → 她自然从窗顶高度掉回地面（Pet 物理接管）。
+   *  触发来源：窗口消失 / 走出窗口跨度 / 被用户拖拽 / 换动作 / 退场。
+   *  ⚠️ 必须清 `groundOverrideY` 与 `onWindowTop`：否则她的地面永远停在窗顶高度，会浮在半空走。
+   *  ⚠️ 必须写 bindBlockUntil 冷却 + 清 lastFeetY：
+   *     否则「刚放手 → 脚底仍贴顶边 → 下一帧又被判定为落在顶边」会立刻重新绑回去。 */
+  private releaseBound(pet: Pet, reason: 'lost' | 'jump' = 'lost') {
+    if (!this.bound.has(pet)) return;
+    this.bound.delete(pet);
+    this.ceiling.cancel(pet); // 不在窗顶了 → 窗顶行为编排一并作废
+    pet.onWindowTop = false;
+    pet.groundOverrideY = null; // 地面还原为屏幕底边 → 从窗顶高度自然落体
+    pet.resumeAfterMenu(); // 清掉可能残留的 menuHold 冻结，否则释放后角色定住不掉
+    if (!pet.isDraggingAction() && !pet.isLeaving()) {
+      pet.setAction(pet.config.defaultAction || 'idle', this.resolver);
+    }
+    // ⚠️ 'jump'（主动从窗边跃下）必须给更长的冷却：她起跳后会在 ~700ms 时**重新落到窗顶高度**，
+    //    那一帧正好满足「下落中从上方穿过顶边」的接住条件（gravity=0.5、vy≈10.4 → 2vy/g≈695ms）。
+    //    700ms 冷却只剩 5ms 余量 → 会被自己接回窗顶，看上去就是「跳了个寂寞」。故 jump 取 1500ms。
+    this.bindBlockUntil.set(pet, performance.now() + (reason === 'jump' ? 1500 : 700));
+    this.lastFeetY.delete(pet);
+  }
+
+  /** 主循环驱动（app.ticker 每帧调用，传入当前所有宠物）。做两件事：
+   *   1) 已站窗顶的宠物：把窗顶作为**地面**持续同步（窗口移动 → 地面跟着移动 + 横向位移叠加）；
+   *      走出窗口跨度 / 被拖拽 / 退场 / 窗口消失 → 释放（地面还原 → 自然掉回地面）。
+   *      ⚠️ 这里**不碰角色的行为**——她在窗顶上走/跑/待机/做动作全部由 Pet 自己跑（见 groundOverrideY）。
+   *   2) 空中宠物：下落中从上方穿过某窗口顶边 → 就地站上去（旧版 Border 接住，不会被甩出屏幕）。 */
+  update(pets: Pet[]) {
     const now = performance.now();
+    // 刷新窗口缓存（节流 ~10fps）：供「跟随」与「窗顶穿越检测」每帧同步读取，避免每帧 IPC 枚举窗口。
+    if (now - this.winCacheAt >= 100) {
+      this.winCacheAt = now;
+      if (this.available === null) {
+        ipcRenderer.invoke('win-available').then((ok: any) => { this.available = !!ok; }).catch(() => { this.available = false; });
+      }
+      ipcRenderer.invoke('win-list').then((w: WinInfo[] | null) => { if (w) this.winCache = w; }).catch(() => {});
+    }
+    // —— 1) 已绑定：跟随窗口；窗口消失 / 被拖拽 / 退场 / 踩空 → 释放掉落 ——
+    for (const [pet, b] of [...this.bound.entries()]) {
+      if (pet.isLeaving() || pet.isDraggingAction()) { this.releaseBound(pet); continue; }
+      const w = this.winCache.find((x) => x.hwnd === b.hwnd && !x.occluded);
+      if (!w) { this.releaseBound(pet); continue; } // 窗口被关/最小化/不再名单里 → 掉下来
+      if (!this.syncBound(pet, b, w, now)) {
+        log('info', '[winledge] 锚点水平离开窗口跨度（旧版 isOn 不成立），掉下去');
+        this.releaseBound(pet);
+        continue;
+      }
+      // 窗顶上的自主漫游（wander）目标点夹进窗口跨度：否则她随便走两步就走出窗沿掉下去，
+      // 「站在窗顶」会变成「站一秒就掉」。带到达回调的编排（走到窗边再跳下）不受影响。
+      pet.clampWalkTarget(w.x, w.x + w.w - pet.config.size.width);
+      if (this.topBehaviorEnabled) this.ceiling.update(pet, w, now);
+      else if (this.ceiling.busy(pet)) this.ceiling.cancel(pet);
+    }
+    // —— 2) 空中宠物：窗顶穿越检测 ——
+    for (const pet of pets) {
+      if (pet.isWindowHeld || pet.isLeaving() || pet.isDraggingAction() || this.bound.has(pet)) continue;
+      if (now < (this.bindBlockUntil.get(pet) ?? 0)) { this.lastFeetY.delete(pet); continue; }
+      const beh = pet.currentBehavior();
+      if (beh === 'climb' || beh === 'ceiling' || beh === 'fly' || beh === 'drag') { this.lastFeetY.delete(pet); continue; }
+      const petH = pet.config.size.height;
+      const feetY = pet.container.y + petH;
+      const prev = this.lastFeetY.get(pet); // ⚠️ 必须在被覆盖前取到上一帧脚底
+      this.lastFeetY.set(pet, feetY);
+      if (!pet.isAirborne()) continue; // 只接「离地」的角色——地面上的角色永不误接
+      if (pet.velocityY() < 0) continue; // 只接下落中的（上升中的不接）
+      if (!this.winCache.length) continue;
+      const petW = pet.config.size.width;
+      const cx = pet.container.x + petW / 2;
+      for (const w of this.winCache) {
+        if (w.occluded) continue;
+        if (cx < w.x || cx > w.x + w.w) continue;
+        // 穿越检测：上一帧脚底还在顶边**上方**、这一帧到了顶边或下方 → 被窗顶接住
+        const crossed = prev !== undefined && prev < w.y && feetY >= w.y;
+        // 兜底：单帧位移极大时可能整帧跨过而 crossed 不成立，这里再认一个「紧贴顶边」的小范围
+        const atTop = feetY >= w.y - 2 && feetY <= w.y + 14;
+        if (crossed || atTop) { this.bindNow(pet, w); break; }
+      }
+    }
     if (this.carry) this.updateCarry(now);
-    if (this.ledge) this.updateLedge(now);
     if (this.show) this.updateShow(now);
+  }
+
+  /** 复刻旧版 `BorderedAction.tick()` 里那唯一一行 —— `anchor = border.move(anchor)`。
+   *
+   *  旧版**没有**任何「绑定到窗口」的持久状态：每个带 `BorderType=Floor` 的动作在每 tick 都把
+   *  角色的锚点交给 Border 去搬一次；搬得动就跟着窗口走，搬不动（超守卫阈值）就停在原地 →
+   *  下一帧 `isOn()` 不成立 → 抛 LostGroundException → 改播下落。全部行为由此自然涌现。
+   *
+   *  本程序等价实现：
+   *   1) 地面 = 窗顶（`pet.groundOverrideY`）—— 之后走路/待机/做动作/踩空下落全部由 Pet 自己跑，
+   *      与站在地面上完全一致（旧版窗顶与地面同为 `FloorCeiling`，只在 `isOn` 上差一个矩形来源）。
+   *   2) 把窗口本轮位移**搬运**到角色身上（横向 +dX、竖直 +dY），但超守卫阈值就不搬（= 旧版放弃跟随）。
+   *      ⚠️ 绝不能用「lerp 到 w.x + relX」：那会和她自己的走路位移抢 x，表现为走不动 / 被拽回原位。
+   *   3) 脱离判定 = 旧版 `FloorCeiling.isOn()`：**只看横向**，锚点（脚底中心）必须落在窗口跨度内。
+   *      ⚠️ 竖直方向**没有**脱离阈值 —— 悬空再高也只是「还没落到窗顶」，由 Pet 重力一直追下去。
+   *
+   *  @returns false = 锚点水平离开窗口跨度（旧版 isOn 不成立）→ 调用方应 releaseBound。 */
+  private syncBound(pet: Pet, b: { hwnd: number; prevWinX: number; prevWinY: number; prevAt: number },
+    w: WinInfo, now: number): boolean {
+    const petH = pet.config.size.height;
+    // 1) 地面 = 窗顶（竖直方向的事全部交给 Pet 的物理）
+    pet.groundOverrideY = w.y - petH;
+
+    // 2) 搬运窗口位移（旧版 Border.move），带守卫阈值
+    const dx = w.x - b.prevWinX;
+    const dy = w.y - b.prevWinY;
+    const elapsed = Math.max(1, now - b.prevAt); // 采样间隔（窗口缓存 ~100ms 刷一次）
+    const k = elapsed / SHIMEJI_TICK_MS;         // 把「每 40ms」的阈值缩放到实际间隔
+    b.prevWinX = w.x; b.prevWinY = w.y; b.prevAt = now;
+
+    // 旧版守卫：任一方向位移超限 → 本轮**完全不搬运**（两个方向各自判定，与旧版两个 if 一致）
+    const followX = Math.abs(dx) < FOLLOW_MAX_DX * k;
+    const followY = dy <= FOLLOW_MAX_DOWN * k && dy >= -FOLLOW_MAX_UP * k;
+    if (followX && dx !== 0) pet.container.x += dx;
+    if (followY && dy !== 0) pet.container.y += dy;
+    // 不搬运的情形：
+    //   窗口下移过快 → 角色留在上方 → 相对窗顶悬空 → Pet 重力接管 → 自由落体**落回窗顶**（不是掉到地面！）
+    //   窗口横向跳太远 → 角色被落下 → 多半同时满足下面的横向脱离 → 掉回地面
+    // ⚠️ 窗口**上移**过快（dy 为负且超阈值）是唯一需要特判的一支：角色会被留在窗顶**下方**，
+    //    此时 `container.y > baselineY()` 不算 airborne、`physicsActive()` 为假 → 没人把她纠正出来，
+    //    她会陷在窗顶里面。旧版这里同样是不跟随 → `isOn()` 不成立 → 抛 LostGround → 改播下落，
+    //    所以这里直接返回 false 走 releaseBound（地面还原为屏幕底边 → 她掉回地面）。
+    if (!followY && dy < 0) return false;
+
+    // 3) 脱离判定（旧版 isOn）：锚点 = 脚底中心，横向必须落在 [窗口左, 窗口右] 内
+    const cx = pet.container.x + pet.config.size.width / 2;
+    return cx >= w.x && cx <= w.x + w.w;
   }
 
   // ============ 投掷演出：阶段推进（对齐原版 ThrowIEFromLeft/Right 的 Sequence） ============
@@ -574,14 +812,14 @@ export class WindowInteract {
       const vy = Math.max(-40, Math.min(40, c.velY * 2.4));
       ipcRenderer.invoke('win-throw', c.hwnd, vx, vy).catch(() => {});
       log('info', 'threw window vx=' + vx.toFixed(1) + ' vy=' + vy.toFixed(1));
-      this.stop();
+      this.releaseFor(c.pet);
       return;
     }
     c.wasDragging = dragging;
     // 超时自动放下（防止永久占用）
     if (now - c.startedAt > 30000) {
       log('info', 'carry timeout, releasing');
-      this.stop();
+      this.releaseFor(c.pet);
       return;
     }
     // 窗口跟随（节流）
@@ -593,37 +831,4 @@ export class WindowInteract {
     }
   }
 
-  /** ledge：轮询窗口矩形跟随；窗口没了 / 拖拽 / 超时 → 掉落（物理接管）。 */
-  private async updateLedge(now: number) {
-    const l = this.ledge!;
-    const pet = l.pet;
-    if (pet.isDraggingAction() || now > l.deadline) {
-      this.dropFromLedge();
-      return;
-    }
-    if (now >= l.nextPoll) {
-      l.nextPoll = now + 150;
-      try {
-        const rect = await ipcRenderer.invoke('win-rect', l.hwnd);
-        if (this.ledge !== l) return; // 已掉落/释放，in-flight 结果作废，避免把 pet 拽回窗口坐标
-        if (!rect) { this.dropFromLedge(); return; }
-        l.lastRect = rect;
-        // 窗口宽度变了（最大化等）→ clamp 相对位置
-        l.relX = Math.max(0, Math.min(l.relX, rect.w - pet.config.size.width));
-        pet.container.x = rect.x + l.relX;
-        pet.container.y = rect.y - pet.config.size.height;
-      } catch {
-        this.dropFromLedge();
-      }
-    }
-  }
-
-  /** 从窗沿掉落：解除挂靠，物理接管（airborne → fall 帧 + 落地弹跳）。 */
-  private dropFromLedge() {
-    const l = this.ledge!;
-    l.pet.isWindowHeld = false;
-    l.pet.setAction(l.pet.config.defaultAction || 'idle', this.resolver);
-    this.ledge = null;
-    log('info', 'dropped from ledge');
-  }
 }

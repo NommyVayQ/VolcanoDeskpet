@@ -55,15 +55,17 @@
   "removeFadeMs": 0,
   "grabDialogue": "...",
   "tapDialogue": ["。", "有事？", "嗯。"],
+  "wanderTauMs": 5000,
+  "wanderMinDelayMs": 4000,
   "wanderRecentExempt": ["walk"],
   "wanderActions": [
     {"id": "walk", "weight": 13},
-    {"id": "creep", "weight": 2},
-    {"id": "sit", "weight": 2},
-    {"id": "eat", "weight": 2},
-    {"id": "shakeleg", "weight": 2},
-    {"id": "work", "weight": 2},
-    {"id": "read", "weight": 2},
+    {"id": "creep", "weight": 1},
+    {"id": "sit", "weight": 1},
+    {"id": "eat", "weight": 1},
+    {"id": "shakeleg", "weight": 1},
+    {"id": "work", "weight": 1},
+    {"id": "read", "weight": 1},
     {"id": "flyCeiling", "weight": 1}
   ],
   "actionGroups": {

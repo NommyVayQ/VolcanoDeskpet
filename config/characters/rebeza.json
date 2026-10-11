@@ -58,6 +58,8 @@
     "呵呵！",
     "哈哈！"
   ],
+  "wanderTauMs": 5000,
+  "wanderMinDelayMs": 4000,
   "wanderRecentExempt": [
     "walk"
   ],
@@ -68,31 +70,31 @@
     },
     {
       "id": "creep",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "sit",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "eat",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "sitAndDangleLegs",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "headache",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "work",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "meat",
-      "weight": 2
+      "weight": 1
     },
     {
       "id": "flyCeiling",

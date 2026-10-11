@@ -74,6 +74,7 @@ function createWindow() {
   const display = screen.getPrimaryDisplay();
   const { x, y, width, height } = display.bounds;
 
+  const appIcon = loadWindowIcon(); // 跑鸟：任务栏 / Alt-Tab（托盘另用 Rose，见 makeTrayIcon）
   mainWindow = new BrowserWindow({
     x,
     y,
@@ -84,6 +85,7 @@ function createWindow() {
     alwaysOnTop: true,
     resizable: false,
     hasShadow: false,
+    ...(appIcon ? { icon: appIcon } : {}), // 任务栏/Alt-Tab 图标
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false, // 简化 MVP 开发，允许渲染进程直接读文件/IPC
@@ -113,8 +115,44 @@ function createWindow() {
   });
 }
 
-/** 生成一个占位托盘图标（纯色方块），避免依赖外部图片资源。 */
-function makeTrayIcon(): Electron.NativeImage {
+/**
+ * 图标路径解析。三个图标位互不相同，别混：
+ * - `icon.png`        窗口/任务栏/Alt-Tab（跑鸟）
+ * - `tray-icon.png`   系统托盘小图标（Rose）
+ * - `file-icon.ico`   exe 文件图标（资源管理器显示，rcedit 嵌入，运行期不读）
+ * 查找顺序：打包后 exe 同级 resources/<name> → 开发时项目根 build/<name>。
+ * 找不到返回 null（调用方自行兜底）。
+ */
+function getIconPath(name: string): string | null {
+  const candidates: string[] = [];
+  try { if (process.resourcesPath) candidates.push(path.join(process.resourcesPath, name)); } catch { /* ignore */ }
+  try { candidates.push(path.join(app.getAppPath(), 'build', name)); } catch { /* ignore */ }
+  for (const p of candidates) {
+    try { if (p && fs.existsSync(p)) return p; } catch { /* ignore */ }
+  }
+  return null;
+}
+
+/** 载入指定图标文件。缺失/解码失败返回 null。 */
+function loadIcon(name: string): Electron.NativeImage | null {
+  const p = getIconPath(name);
+  if (!p) return null;
+  const img = nativeImage.createFromPath(p);
+  return img.isEmpty() ? null : img;
+}
+
+/** 窗口/任务栏/Alt-Tab 图标 = 跑鸟（`build/icon.png`）。 */
+function loadWindowIcon(): Electron.NativeImage | null {
+  return loadIcon('icon.png');
+}
+
+/** 系统托盘小图标 = Rose（`build/tray-icon.png`）。 */
+function loadTrayIcon(): Electron.NativeImage | null {
+  return loadIcon('tray-icon.png');
+}
+
+/** 生成一个占位托盘图标（纯色方块），仅在真实图标缺失时兜底。 */
+function makePlaceholderTrayIcon(): Electron.NativeImage {
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
   for (let i = 0; i < size * size; i++) {
@@ -126,7 +164,21 @@ function makeTrayIcon(): Electron.NativeImage {
   return nativeImage.createFromBitmap(buf, { width: size, height: size });
 }
 
-/** 创建系统托盘：右键菜单含「角色管理面板」「设置」「窗口归还」「关于」「退出」。 */
+/**
+ * 托盘图标：优先 `build/tray-icon.png`（Rose），缺失时退回窗口图标，再退回占位方块。
+ * 源图已按像素风做成 32x32，偏大才缩（托盘最佳 16~32，任意 DPI 下都是整数倍）。
+ */
+function makeTrayIcon(): Electron.NativeImage {
+  const img = loadTrayIcon() ?? loadWindowIcon();
+  if (img) {
+    const { width } = img.getSize();
+    return width > 64 ? img.resize({ width: 32, height: 32 }) : img;
+  }
+  logBoot('tray-icon.png / icon.png 均未找到，托盘回退占位方块');
+  return makePlaceholderTrayIcon();
+}
+
+/** 创建系统托盘：右键菜单含「角色管理面板」「动作预览」「设置」「窗口归还」「关于」「退出」。 */
 function createTray() {
   try {
     tray = new Tray(makeTrayIcon());
@@ -134,6 +186,12 @@ function createTray() {
       {
         label: '角色管理面板',
         click: () => mainWindow?.webContents.send('open-manager-panel'),
+      },
+      {
+        // 只读动作预览器（2026-10-03）：选角色 → 选动作 → 逐帧播放 + 时序数据。
+        // 与「角色管理面板」并列放在托盘，**不进角色右键菜单**（右键只放角色动作）。
+        label: '动作预览',
+        click: () => mainWindow?.webContents.send('open-action-preview-panel'),
       },
       {
         // 与右键菜单同名同序：设置（含窗口互动配置）/ 关于
@@ -393,6 +451,10 @@ app.whenReady().then(() => {
   try { fs.writeFileSync(bootLogPath, ''); } catch { /* ignore */ }
   attachBootLog(bootLogPath);
   logBoot('app ready, version=' + app.getVersion() + ', log dir=' + logDir);
+
+  // 显式声明 AppUserModelId（与 package.json build.appId 一致）：
+  // Windows 任务栏据此归组并解析图标，缺失时任务栏会退回 exe 内嵌图标。
+  app.setAppUserModelId('com.deskpet.app');
 
   createWindow();
   createTray();

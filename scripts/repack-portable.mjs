@@ -11,7 +11,7 @@
 //
 // 注意：本脚本同步「代码 + 美术 + 用户配置(config)」进已存在的解压目录，不重新生成 exe。
 //       exe 本身（electron 运行时 + 改名 DeskPet.exe）在首次组装后不变。
-import { existsSync, cpSync, readFileSync, renameSync, mkdirSync } from 'fs';
+import { existsSync, cpSync, copyFileSync, readFileSync, renameSync, mkdirSync, statSync, openSync, readSync, closeSync, readdirSync } from 'fs';
 import { spawnSync, execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -33,7 +33,10 @@ if (!version) {
   process.exit(1);
 }
 
-const buildName = `DeskPet-Portable-${version}`;
+// 可选命令行参数：指定目标目录名（默认按版本号 DeskPet-Portable-<version>）。
+// 例：node scripts/repack-portable.mjs 桌宠测试版   —— 把当前源码刷进自建的测试目录
+const targetArg = process.argv[2] && process.argv[2].trim();
+const buildName = targetArg || `DeskPet-Portable-${version}`;
 const dir = path.join(root, 'release', buildName);
 
 console.log(`\n=== 重装便携版 ${buildName} ===`);
@@ -144,6 +147,7 @@ if (!existsSync(srcPkg)) {
   process.exit(1);
 }
 console.log('  · 同步 package.json -> resources/app/package.json (version=' + version + ')');
+removeForce(dstPkg); // 先删再拷：直接覆盖已存在文件在部分环境/被占用时会失败
 cpSync(srcPkg, dstPkg);
 
 // --- 4.7 同步 koffi 原生模块（窗口交互依赖；漏同步则窗口系功能静默失效）---
@@ -162,6 +166,121 @@ if (existsSync(koromixSrc)) {
   console.log('  · 同步 @koromix -> resources/app/node_modules/@koromix');
   removeForce(path.join(nmDst, '@koromix'));
   cpSync(koromixSrc, path.join(nmDst, '@koromix'), { recursive: true });
+}
+
+// --- 4.8 运行期图标：同步到 resources/（三个图标位互不相同，别混）---
+//     icon.png       = 窗口/任务栏/Alt-Tab  → 跑鸟
+//     tray-icon.png  = 系统托盘小图标        → Rose
+//     file-icon.ico  = exe 文件图标（rcedit 嵌入，运行期不读）→ Rose
+const winIconSrc = path.join(root, 'build', 'icon.png');
+const trayIconSrc = path.join(root, 'build', 'tray-icon.png');
+const fileIconSrc = path.join(root, 'build', 'file-icon.ico');
+for (const [src, name, what] of [
+  [winIconSrc, 'icon.png', '窗口/任务栏（跑鸟）'],
+  [trayIconSrc, 'tray-icon.png', '系统托盘（Rose）'],
+]) {
+  if (existsSync(src)) {
+    const dst = path.join(dir, 'resources', name);
+    removeForce(dst);
+    cpSync(src, dst);
+    console.log(`  · 同步 build/${name} -> resources/${name}（${what}）`);
+  } else {
+    console.warn(`  ! 缺少 build/${name}，跳过（该项将回退兜底图标）`);
+  }
+}
+
+// --- 4.9 把 ico 嵌进 DeskPet.exe（资源管理器/桌面快捷方式显示的图标）---
+// 依赖 electron-builder 自带的 app-builder rcedit；首次使用需联网下载 winCodeSign，
+// 缺失时只告警不中断（运行期图标仍由 resources/icon.png 提供）。
+const exePath = path.join(dir, 'DeskPet.exe');
+if (existsSync(fileIconSrc) && existsSync(exePath)) {
+  embedExeIcon(exePath, fileIconSrc);
+}
+
+/** 读文件前 2 字节（只读，不加载整个 180MB exe）。 */
+function peHead(file) {
+  let fd;
+  try {
+    fd = openSync(file, 'r');
+    const b = Buffer.alloc(2);
+    readSync(fd, b, 0, 2, 0);
+    return b.toString('latin1');
+  } catch {
+    return '';
+  } finally {
+    if (fd !== undefined) try { closeSync(fd); } catch { /* ignore */ }
+  }
+}
+
+/** 找一个可直接调用的 rcedit 二进制。
+ *  来源优先级： ① electron-builder 下载缓存 <cache>/winCodeSign/<hash>/rcedit-*.exe（离线可用）
+ *               ② 项目自带 tools/rcedit-x64.exe
+ *  都找不到则返回 null（调用方回退 app-builder，其会自动联网下载 winCodeSign）。 */
+function findRcedit() {
+  const candidates = [];
+  const la = process.env.LOCALAPPDATA;
+  for (const base of [
+    la && path.join(la, 'electron-builder', 'Cache', 'winCodeSign'),
+    la && path.join(la, 'electron-builder', 'cache', 'winCodeSign'),
+  ]) {
+    if (!base || !existsSync(base)) continue;
+    let subs = [];
+    try { subs = readdirSync(base); } catch { /* ignore */ }
+    for (const s of subs) {
+      for (const name of ['rcedit-x64.exe', 'rcedit-ia32.exe']) {
+        const p = path.join(base, s, name);
+        if (existsSync(p)) candidates.push(p);
+      }
+    }
+  }
+  candidates.push(path.join(root, 'tools', 'rcedit-x64.exe'));
+  return candidates.find(existsSync) || null;
+}
+
+/** 给 exe 换文件图标。优先直接调 rcedit，回退 app-builder；先改副本、校验通过再替换，避免损坏正式 exe。 */
+function embedExeIcon(exe, ico) {
+  const rcedit = findRcedit();
+  const ab = rcedit ? null : [
+    path.join(root, 'node_modules', 'app-builder-bin', 'win', 'x64', 'app-builder.exe'),
+    path.join(root, 'node_modules', 'app-builder-bin', 'win', 'ia32', 'app-builder.exe'),
+  ].find(existsSync);
+  if (!rcedit && !ab) {
+    console.warn('  ! 未找到 rcedit / app-builder.exe，跳过 exe 图标嵌入');
+    return;
+  }
+  const tmp = exe + '.icon-tmp';
+  try {
+    const sizeBefore = statSync(exe).size;
+    removeForce(tmp);
+    copyFileSync(exe, tmp);
+    let r;
+    if (rcedit) {
+      // 直接调用：rcedit <exe> --set-icon <ico>
+      r = spawnSync(rcedit, [tmp, '--set-icon', ico], { encoding: 'utf8', cwd: root, timeout: 90000 });
+    } else {
+      // app-builder rcedit 的 --args 必须是 base64(JSON 字符串数组)；首次使用需联网下载 winCodeSign
+      const b64 = Buffer.from(JSON.stringify(['--set-icon', ico, tmp]), 'utf8').toString('base64');
+      r = spawnSync(ab, ['rcedit', '--args=' + b64], { encoding: 'utf8', cwd: root, timeout: 90000 });
+    }
+    const out = ((r.stdout || '') + (r.stderr || '')).trim();
+    if (r.status !== 0) {
+      console.warn('  ! exe 图标嵌入失败，已跳过：', out.split('\n')[0] || (r.error && r.error.message) || ('rc=' + r.status));
+      removeForce(tmp);
+      return;
+    }
+    // 校验：仍是合法 PE（MZ 头）且体积无异常缩减
+    if (peHead(tmp) !== 'MZ' || statSync(tmp).size < sizeBefore * 0.9) {
+      console.warn('  ! 换图标后 exe 校验不过，放弃替换');
+      removeForce(tmp);
+      return;
+    }
+    removeForce(exe);
+    renameSync(tmp, exe);
+    console.log('  · 已嵌入 exe 文件图标 ' + path.relative(root, ico) + ' -> DeskPet.exe');
+  } catch (e) {
+    console.warn('  ! exe 图标嵌入异常，已跳过：', e.message);
+    removeForce(tmp);
+  }
 }
 
 // --- 5. verify ---

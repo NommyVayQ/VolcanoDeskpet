@@ -23,3 +23,6 @@ perch-zoom.png
 # --- 系统 ---
 .DS_Store
 Thumbs.db
+
+# --- 单文件测试编译产物 ---
+.tmp-wintop/

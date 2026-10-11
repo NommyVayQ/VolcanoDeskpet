@@ -2,8 +2,12 @@
   "actions": {
     "stand": {
       "behavior": "static",
-      "frames": ["L-stand-1"],
-      "rightFrames": ["R-stand-1"],
+      "frames": [
+        "L-stand-1"
+      ],
+      "rightFrames": [
+        "R-stand-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "站立",
@@ -13,16 +17,40 @@
     "walk": {
       "behavior": "walk",
       "frames": [
-        { "name": "L-walk-1", "vx": 1.2 },
-        { "name": "L-walk-2", "vx": 1.2 },
-        { "name": "L-walk-3", "vx": 1.2 },
-        { "name": "L-walk-4", "vx": 1.2 }
+        {
+          "name": "L-walk-1",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-2",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-3",
+          "vx": 1.2
+        },
+        {
+          "name": "L-walk-4",
+          "vx": 1.2
+        }
       ],
       "rightFrames": [
-        { "name": "R-walk-1", "vx": 1.2 },
-        { "name": "R-walk-2", "vx": 1.2 },
-        { "name": "R-walk-3", "vx": 1.2 },
-        { "name": "R-walk-4", "vx": 1.2 }
+        {
+          "name": "R-walk-1",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-2",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-3",
+          "vx": 1.2
+        },
+        {
+          "name": "R-walk-4",
+          "vx": 1.2
+        }
       ],
       "loop": true,
       "moveSpeed": 1.2,
@@ -33,8 +61,16 @@
     },
     "drag": {
       "behavior": "drag",
-      "frames": ["L-swing-1", "L-swing-3", "L-swing-2"],
-      "rightFrames": ["R-swing-1", "R-swing-2", "R-swing-3"],
+      "frames": [
+        "L-swing-1",
+        "L-swing-3",
+        "L-swing-2"
+      ],
+      "rightFrames": [
+        "R-swing-1",
+        "R-swing-2",
+        "R-swing-3"
+      ],
       "label": "拖拽",
       "menu": false,
       "frameMs": 1600,
@@ -42,8 +78,12 @@
     },
     "drag-idle": {
       "behavior": "drag",
-      "frames": ["L-swing-1"],
-      "rightFrames": ["R-swing-1"],
+      "frames": [
+        "L-swing-1"
+      ],
+      "rightFrames": [
+        "R-swing-1"
+      ],
       "label": "拖拽静止",
       "menu": false,
       "frameMs": 1600,
@@ -52,14 +92,38 @@
     "climb": {
       "behavior": "climb",
       "frames": [
-        { "name": "L-climb-1", "vy": 0, "ms": 700 },
-        { "name": "L-climb-2", "vy": 2, "ms": 250 },
-        { "name": "L-climb-3", "vy": 1, "ms": 250 }
+        {
+          "name": "L-climb-1",
+          "vy": 0,
+          "ms": 700
+        },
+        {
+          "name": "L-climb-2",
+          "vy": 2,
+          "ms": 250
+        },
+        {
+          "name": "L-climb-3",
+          "vy": 1,
+          "ms": 250
+        }
       ],
       "rightFrames": [
-        { "name": "R-climb-1", "vy": 0, "ms": 700 },
-        { "name": "R-climb-2", "vy": 2, "ms": 250 },
-        { "name": "R-climb-3", "vy": 1, "ms": 250 }
+        {
+          "name": "R-climb-1",
+          "vy": 0,
+          "ms": 700
+        },
+        {
+          "name": "R-climb-2",
+          "vy": 2,
+          "ms": 250
+        },
+        {
+          "name": "R-climb-3",
+          "vy": 1,
+          "ms": 250
+        }
       ],
       "loop": true,
       "moveSpeed": 1.2,
@@ -107,20 +171,68 @@
     "creep": {
       "behavior": "walk",
       "frames": [
-        { "name": "L-creep-1", "vx": 0, "ms": 700 },
-        { "name": "L-creep-2", "vx": 0, "ms": 500 },
-        { "name": "L-creep-1", "vx": 2, "ms": 100 },
-        { "name": "L-creep-1", "vx": 1.33, "ms": 100 },
-        { "name": "L-creep-1", "vx": 0.67, "ms": 100 },
-        { "name": "L-creep-1", "vx": 0, "ms": 800 }
+        {
+          "name": "L-creep-1",
+          "vx": 0,
+          "ms": 700
+        },
+        {
+          "name": "L-creep-2",
+          "vx": 0,
+          "ms": 500
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 2,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 1.33,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 0.67,
+          "ms": 100
+        },
+        {
+          "name": "L-creep-1",
+          "vx": 0,
+          "ms": 800
+        }
       ],
       "rightFrames": [
-        { "name": "R-creep-1", "vx": 0, "ms": 700 },
-        { "name": "R-creep-2", "vx": 0, "ms": 500 },
-        { "name": "R-creep-1", "vx": 2, "ms": 100 },
-        { "name": "R-creep-1", "vx": 1.33, "ms": 100 },
-        { "name": "R-creep-1", "vx": 0.67, "ms": 100 },
-        { "name": "R-creep-1", "vx": 0, "ms": 800 }
+        {
+          "name": "R-creep-1",
+          "vx": 0,
+          "ms": 700
+        },
+        {
+          "name": "R-creep-2",
+          "vx": 0,
+          "ms": 500
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 2,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 1.33,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 0.67,
+          "ms": 100
+        },
+        {
+          "name": "R-creep-1",
+          "vx": 0,
+          "ms": 800
+        }
       ],
       "loop": true,
       "menu": true,
@@ -130,8 +242,12 @@
     },
     "fall": {
       "behavior": "static",
-      "frames": ["L-fall-1"],
-      "rightFrames": ["R-fall-1"],
+      "frames": [
+        "L-fall-1"
+      ],
+      "rightFrames": [
+        "R-fall-1"
+      ],
       "loop": true,
       "label": "掉落（空中）",
       "menu": false,
@@ -140,8 +256,16 @@
     },
     "tripping": {
       "behavior": "static",
-      "frames": ["L-fall-2", "L-fall-3", "L-fall-4"],
-      "rightFrames": ["R-fall-2", "R-fall-3", "R-fall-4"],
+      "frames": [
+        "L-fall-2",
+        "L-fall-3",
+        "L-fall-4"
+      ],
+      "rightFrames": [
+        "R-fall-2",
+        "R-fall-3",
+        "R-fall-4"
+      ],
       "loop": false,
       "menu": false,
       "label": "摔倒",
@@ -153,10 +277,22 @@
       "flyMode": "free",
       "width": 150,
       "height": 200,
-      "frames": ["L-flymoving-1", "L-flymoving-2"],
-      "rightFrames": ["R-flymoving-1", "R-flymoving-2"],
-      "hoverFrames": ["L-fly-1", "L-fly-2"],
-      "hoverRightFrames": ["R-fly-1", "R-fly-2"],
+      "frames": [
+        "L-flymoving-1",
+        "L-flymoving-2"
+      ],
+      "rightFrames": [
+        "R-flymoving-1",
+        "R-flymoving-2"
+      ],
+      "hoverFrames": [
+        "L-fly-1",
+        "L-fly-2"
+      ],
+      "hoverRightFrames": [
+        "R-fly-1",
+        "R-fly-2"
+      ],
       "loop": true,
       "moveSpeed": 1.5,
       "flyMoveMinMs": 1100,
@@ -167,17 +303,31 @@
       "label": "乱飞",
       "frameMs": 750,
       "durationMs": 5000,
-      "next": ["fall"]
+      "next": [
+        "fall"
+      ]
     },
     "flyCeiling": {
       "behavior": "fly",
       "flyMode": "ceiling",
       "width": 150,
       "height": 200,
-      "frames": ["L-flymoving-1", "L-flymoving-2"],
-      "rightFrames": ["R-flymoving-1", "R-flymoving-2"],
-      "hoverFrames": ["L-fly-1", "L-fly-2"],
-      "hoverRightFrames": ["R-fly-1", "R-fly-2"],
+      "frames": [
+        "L-flymoving-1",
+        "L-flymoving-2"
+      ],
+      "rightFrames": [
+        "R-flymoving-1",
+        "R-flymoving-2"
+      ],
+      "hoverFrames": [
+        "L-fly-1",
+        "L-fly-2"
+      ],
+      "hoverRightFrames": [
+        "R-fly-1",
+        "R-fly-2"
+      ],
       "loop": true,
       "moveSpeed": 2,
       "flyMoveMinMs": 1100,
@@ -188,12 +338,22 @@
       "label": "贴顶飞行",
       "frameMs": 750,
       "durationMs": 0,
-      "next": ["fall"]
+      "next": [
+        "fall"
+      ]
     },
     "bye": {
       "behavior": "static",
-      "frames": ["disappear-1", "disappear-6", "disappear-7"],
-      "rightFrames": ["disappear-1", "disappear-6", "disappear-7"],
+      "frames": [
+        "disappear-1",
+        "disappear-6",
+        "disappear-7"
+      ],
+      "rightFrames": [
+        "disappear-1",
+        "disappear-6",
+        "disappear-7"
+      ],
       "loop": false,
       "menu": false,
       "label": "消失",
@@ -202,8 +362,12 @@
     },
     "sit": {
       "behavior": "static",
-      "frames": ["L-sit-1"],
-      "rightFrames": ["R-sit-1"],
+      "frames": [
+        "L-sit-1"
+      ],
+      "rightFrames": [
+        "R-sit-1"
+      ],
       "loop": true,
       "menu": true,
       "label": "坐下",
@@ -212,7 +376,9 @@
     },
     "sitAndDangleLegs": {
       "behavior": "static",
-      "offset": { "y": 12 },
+      "offset": {
+        "y": 12
+      },
       "frames": [
         "L-shakeleg-1",
         "L-shakeleg-1",
@@ -380,11 +546,22 @@
       "menu": true,
       "label": "烤肉"
     },
-    "pair_mona": { "pairTrigger": true, "menuGroup": "互动", "pairWith": "mona", "menu": true, "label": "吃莫娜做的葡萄酒" },
+    "pair_mona": {
+      "pairTrigger": true,
+      "menuGroup": "互动",
+      "pairWith": "mona",
+      "pairId": "cook_rebeza",
+      "menu": true,
+      "label": "喝莫娜做的葡萄酒"
+    },
     "jumpWindow": {
       "behavior": "static",
-      "frames": ["L-climb-1"],
-      "rightFrames": ["R-climb-1"],
+      "frames": [
+        "L-climb-1"
+      ],
+      "rightFrames": [
+        "R-climb-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "跳向窗口下角",
@@ -393,8 +570,12 @@
     },
     "grabWindow": {
       "behavior": "static",
-      "frames": ["L-throw-1"],
-      "rightFrames": ["R-throw-1"],
+      "frames": [
+        "L-throw-1"
+      ],
+      "rightFrames": [
+        "R-throw-1"
+      ],
       "loop": true,
       "menu": false,
       "label": "抓住窗口",
@@ -403,8 +584,14 @@
     },
     "carryWindow": {
       "behavior": "static",
-      "frames": ["L-throw-1", "L-throw-2"],
-      "rightFrames": ["R-throw-1", "R-throw-2"],
+      "frames": [
+        "L-throw-1",
+        "L-throw-2"
+      ],
+      "rightFrames": [
+        "R-throw-1",
+        "R-throw-2"
+      ],
       "loop": true,
       "menu": false,
       "label": "扛着窗口",
@@ -413,8 +600,12 @@
     },
     "throwWindow": {
       "behavior": "static",
-      "frames": ["L-throw-3"],
-      "rightFrames": ["R-throw-3"],
+      "frames": [
+        "L-throw-3"
+      ],
+      "rightFrames": [
+        "R-throw-3"
+      ],
       "loop": false,
       "menu": false,
       "label": "甩出窗口",
@@ -423,8 +614,12 @@
     },
     "windowThrow": {
       "behavior": "static",
-      "frames": ["L-throw-2"],
-      "rightFrames": ["R-throw-2"],
+      "frames": [
+        "L-throw-2"
+      ],
+      "rightFrames": [
+        "R-throw-2"
+      ],
       "loop": true,
       "menu": true,
       "label": "抛掷窗口",
@@ -523,12 +718,14 @@
       "pairTrigger": true,
       "pairWith": "rose",
       "pairId": "rose_rebeza",
-      "label": "和露丝聊天",
+      "label": "和露丝斗殴",
       "frameMs": 900,
       "loopCount": 1,
       "durationMs": 0,
       "flip": false,
-      "offset": { "x": 52 }
+      "offset": {
+        "x": 52
+      }
     },
     "pair_rebeza_gwen": {
       "behavior": "static",
@@ -566,7 +763,9 @@
       "frameMs": 1200,
       "loopCount": 1,
       "durationMs": 0,
-      "offset": { "x": 52 }
+      "offset": {
+        "x": 52
+      }
     }
   }
 }

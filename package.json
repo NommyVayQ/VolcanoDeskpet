@@ -1,6 +1,6 @@
 {
   "name": "deskpet",
-  "version": "6.0.0",
+  "version": "6.2.0",
   "description": "可互动型桌宠程序 - 可移植、美术资源可自替换",
   "main": "dist/main/main/index.js",
   "scripts": {
@@ -42,7 +42,8 @@
     "productName": "DeskPet",
     "win": {
       "target": "portable",
-      "sign": false
+      "sign": false,
+      "icon": "build/file-icon.ico"
     },
     "portable": {
       "artifactName": "DeskPet-Portable-${version}.${ext}"
@@ -61,6 +62,14 @@
       {
         "from": "assets",
         "to": "assets"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/tray-icon.png",
+        "to": "tray-icon.png"
       }
     ],
     "asar": true
